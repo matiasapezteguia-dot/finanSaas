@@ -50,15 +50,15 @@ const Tabs: React.FC<TabsProps> = ({ children }) => {
   );
 };
 
-const ListManager: React.FC<{ 
-  title: string; 
-  list: any[]; 
-  onAdd: (item: string) => void; 
-   onDelete: (item: string) => void; 
-   onUpdate: (oldItem: string, newItem: string) => void; 
-   getItemName?: (item: any) => string; 
+const ListManager: React.FC<{
+  title: string;
+  list: { id: string; name: string }[]; // More specific type for list items
+  onAdd: (name: string) => void;
+   onDelete: (id: string) => void; // Changed signature
+   onUpdate: (id: string, newName: string) => void; // Changed signature
+   getItemName?: (item: { id: string; name: string }) => string; // More specific type
    accounts?: Account[]; // Add accounts prop for deletion rule
-   renderItemExtra?: (item: any) => React.ReactNode; // New prop for extra content
+   renderItemExtra?: (item: { id: string; name: string }) => React.ReactNode; // More specific type
 }> = ({ title, list, onAdd, onDelete, onUpdate, getItemName, accounts, renderItemExtra }) => {
   const [newItem, setNewItem] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,14 +71,14 @@ const ListManager: React.FC<{
     }
   };
 
-  const handleEdit = (item: string) => {
-    setEditingId(item);
-    setEditingText(item);
+  const handleEdit = (item: { id: string; name: string }) => { // Changed parameter to object
+    setEditingId(item.id); // Store id
+    setEditingText(item.name); // Store name for editing
   };
 
-  const handleSave = (oldItem: string) => {
-    if (editingText.trim() && editingText.trim() !== oldItem) {
-      onUpdate(oldItem, editingText.trim());
+  const handleSave = (id: string) => { // Changed parameter to id
+    if (editingText.trim()) {
+      onUpdate(id, editingText.trim()); // Pass id and newName
     }
     setEditingId(null);
     setEditingText('');
@@ -89,10 +89,12 @@ const ListManager: React.FC<{
     setEditingText('');
   };
 
-  const isDeletable = (item: string) => {
+  const isDeletable = (id: string) => { // Changed parameter to id
     if (!accounts) return true; // If accounts are not provided, assume deletable
     // Check if any account uses this category or group
-    return !accounts.some(account => account.categoria === item || account.grupo === item);
+    const item = list.find(i => i.id === id); // Find item by id
+    if (!item) return true; // If item not found, assume deletable
+    return !accounts.some(account => account.categoria === item.name || account.grupo === item.name); // Check against item.name
   };
 
   return (
@@ -115,8 +117,8 @@ const ListManager: React.FC<{
       </div>
       <ul className="mt-4 border border-gray-200 rounded-md divide-y divide-gray-200">
         {list.map((item) => (
-          <li key={getItemName ? getItemName(item) : item} className="px-4 py-3 flex items-center justify-between text-sm text-gray-900">
-            {editingId === (getItemName ? getItemName(item) : item) ? (
+          <li key={item.id} className="px-4 py-3 flex items-center justify-between text-sm text-gray-900"> {/* Changed key to item.id */}
+            {editingId === item.id ? ( // Changed comparison to item.id
               <div className="flex-grow flex items-center space-x-2">
                 <input
                   type="text"
@@ -125,7 +127,7 @@ const ListManager: React.FC<{
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 />
                 <button
-                  onClick={() => handleSave(getItemName ? getItemName(item) : item)}
+                  onClick={() => handleSave(item.id)} // Pass item.id
                   className="inline-flex items-center rounded-md border border-transparent bg-green-600 px-3 py-1 text-sm font-medium text-white shadow-sm hover:bg-green-700"
                 >
                   Guardar
@@ -139,24 +141,24 @@ const ListManager: React.FC<{
               </div>
             ) : (
               <span className="flex-grow flex items-center justify-between">
-                {getItemName ? getItemName(item) : item}
+                {getItemName ? getItemName(item) : item.name} {/* Use item.name if getItemName not provided */}
                 {renderItemExtra && renderItemExtra(item)}
               </span>
             )}
             <div className="flex space-x-2 ml-4">
-              {editingId !== (getItemName ? getItemName(item) : item) && (
+              {editingId !== item.id && ( // Changed comparison to item.id
                 <button
-                  onClick={() => handleEdit(getItemName ? getItemName(item) : item)}
+                  onClick={() => handleEdit(item)} // Pass item object
                   className="text-indigo-600 hover:text-indigo-900"
                 >
                   Editar
                 </button>
               )}
               <button
-                onClick={() => onDelete(getItemName ? getItemName(item) : item)}
-                className={`text-red-600 hover:text-red-900 ${!isDeletable(getItemName ? getItemName(item) : item) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''}`}
-                disabled={!isDeletable(getItemName ? getItemName(item) : item)}
-                title={!isDeletable(getItemName ? getItemName(item) : item) ? 'No se puede eliminar porque tiene cuentas asociadas' : ''}
+                onClick={() => onDelete(item.id)} // Pass item.id
+                className={`text-red-600 hover:text-red-900 ${!isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''}`}
+                disabled={!isDeletable(item.id)} // Pass item.id
+                title={!isDeletable(item.id) ? 'No se puede eliminar porque tiene cuentas asociadas' : ''}
               >
                 Eliminar
               </button>
@@ -199,10 +201,9 @@ export default function ConfiguracionPage() {
   const [newAccount, setNewAccount] = useState<Omit<Account, 'id'> & { grupo: string; categoria: string }>({
     nombre: '',
     montoInicial: 0,
-    // date: new Date().toISOString().split('T')[0], // No longer needed as per Account interface
     moneda: 'ARS',
-    grupo: accountGroups[0] || '',
-    categoria: accountCategories[0]?.name || '',
+    grupo: '', // Empezamos vacío de forma segura para el servidor
+    categoria: '', // Empezamos vacío de forma segura para el servidor
   });
 
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
@@ -265,7 +266,7 @@ export default function ConfiguracionPage() {
       <h1 className="text-2xl font-bold mb-6">Configuración</h1>
       <Tabs>
 
-        <Tab label="Grupos de Cuenta">
+       <Tab label="Grupos de Cuenta">
           <ListManager
             title="Grupos de Cuenta"
             list={accountGroups}
@@ -273,15 +274,15 @@ export default function ConfiguracionPage() {
             onUpdate={updateAccountGroup}
             onDelete={deleteAccountGroup}
             accounts={accounts}
-            renderItemExtra={(group: string) => {
-              // Calculamos el total ARS dinámicamente para este grupo
+            getItemName={(group) => group.name} // Asegura consistencia de lectura
+            renderItemExtra={(group: { id: string; name: string }) => {
+              // CORREGIDO: Ahora se accede a group.name para filtrar las cuentas asociadas
               const totalARS = accounts
-                .filter(a => a.grupo === group && a.moneda === 'ARS')
+                .filter(a => a.grupo === group.name && a.moneda === 'ARS')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
 
-              // Calculamos el total USD dinámicamente para este grupo
               const totalUSD = accounts
-                .filter(a => a.grupo === group && a.moneda === 'USD')
+                .filter(a => a.grupo === group.name && a.moneda === 'USD')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);            
 
               const formatCurrency = (value: number, currency: 'ARS' | 'USD') => {
@@ -309,14 +310,13 @@ export default function ConfiguracionPage() {
             onUpdate={updateAccountCategory}
             onDelete={deleteAccountCategory}
             accounts={accounts}
-            getItemName={(category: AccountCategory) => category.name}
-            renderItemExtra={(category: AccountCategory) => {
-              // Calculamos el total ARS dinámicamente para esta categoría
+            getItemName={(category: { id: string; name: string }) => category.name}
+            renderItemExtra={(category: { id: string; name: string }) => {
+              // CORREGIDO: Asegurado tipado explícito del objeto en lugar de usar la interfaz global rota
               const totalARS = accounts
                 .filter(a => a.categoria === category.name && a.moneda === 'ARS')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
 
-              // Calculamos el total USD dinámicamente para esta categoría
               const totalUSD = accounts
                 .filter(a => a.categoria === category.name && a.moneda === 'USD')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
@@ -337,7 +337,7 @@ export default function ConfiguracionPage() {
               );
             }}
           />
-        </Tab>
+        </Tab>        
         <Tab label="Cuentas">
           <div className="mt-4">
             <h3 className="text-lg font-medium text-gray-900">Administrar Cuentas</h3>
@@ -383,7 +383,8 @@ export default function ConfiguracionPage() {
                   onChange={(e) => setNewAccount({ ...newAccount, grupo: e.target.value })}
                 >
                   {accountGroups.map((group) => (
-                    <option key={group} value={group}>{group}</option>
+                    // CORREGIDO: Usamos group.id para la key única y group.name para el valor y texto
+                    <option key={group.id} value={group.name}>{group.name}</option>
                   ))}
                 </select>
               </div>

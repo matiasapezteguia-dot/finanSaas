@@ -1,4 +1,4 @@
-import { ICatalogRepository, AccountCategory, MovementTypeItem } from '../../types/finanzas';
+import { ICatalogRepository, AccountCategory, MovementTypeItem, AccountGroup } from '../../types/finanzas';
 import { Database } from '../../types/supabase_types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
@@ -8,17 +8,17 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
   constructor(supabase: SupabaseClient<Database>) {
     this.supabase = supabase;
   }
-  async fetchGroups(): Promise<string[]> {
+  async fetchGroups(): Promise<AccountGroup[]> {
     const { data, error } = await this.supabase
       .from('account_groups')
-      .select('name');
+      .select('id, name'); // Select id and name
 
     if (error) {
       console.error('Error fetching groups:', error);
       throw new Error(error.message);
     }
 
-    return data.map((group: Pick<Database['public']['Tables']['account_groups']['Row'], 'name'>) => group.name);
+    return data as AccountGroup[]; // Cast to AccountGroup[]
   }
 
   async fetchCategories(): Promise<AccountCategory[]> {
@@ -92,11 +92,11 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
       throw new Error(error.message);
     }
   }
-  async updateGroup(oldName: string, newName: string): Promise<void> {
+  async updateGroup(id: string, newName: string): Promise<void> {
     const { error } = await this.supabase
       .from('account_groups')
       .update({ name: newName })
-      .eq('name', oldName);
+      .eq('id', id);
 
     if (error) {
       console.error('Error updating group:', error);
@@ -104,11 +104,11 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
     }
   }
 
-  async updateCategory(oldName: string, newName: string): Promise<void> {
+  async updateCategory(id: string, newName: string): Promise<void> {
     const { error } = await this.supabase
       .from('account_categories')
       .update({ name: newName })
-      .eq('name', oldName);
+      .eq('id', id);
 
     if (error) {
       console.error('Error updating category:', error);

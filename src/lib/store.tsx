@@ -9,7 +9,7 @@ import { SupabaseCatalogRepository } from './repositories/SupabaseCatalogReposit
 const initialState: StoreState = {
   transactions: [],
   accounts: [],
-  accountGroups: ['Bancos', 'Efectivo', 'Brókers'],
+  accountGroups: [],
   accountCategories: [],
   transactionTypes: [],
   profile: null,
@@ -156,11 +156,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    updateAccountGroup: async (oldName: string, newName: string) => {
+    updateAccountGroup: async (id: string, newName: string) => {
       try {
         const supabase = createClientSupabaseClient();
         const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.updateGroup(oldName, newName);
+        await supabaseCatalogRepository.updateGroup(id, newName);
         await get().fetchInitialData();
       } catch (error) {
         console.error(error);
@@ -189,11 +189,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    updateAccountCategory: async (oldName: string, newName: string) => {
+    updateAccountCategory: async (id: string, newName: string) => {
       try {
         const supabase = createClientSupabaseClient();
         const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.updateCategory(oldName, newName);
+        await supabaseCatalogRepository.updateCategory(id, newName);
         await get().fetchInitialData();
       } catch (error) {
         console.error(error);

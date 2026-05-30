@@ -79,15 +79,15 @@ export interface IAccountRepository {
 }
 
 export interface ICatalogRepository {
-  fetchGroups(): Promise<string[]>;
+  fetchGroups(): Promise<AccountGroup[]>;
   fetchCategories(): Promise<AccountCategory[]>;
   fetchTransactionTypes(): Promise<MovementTypeItem[]>;
   addCategory(name: string): Promise<void>;
   deleteCategory(id: string): Promise<void>;
   addGroup(name: string): Promise<void>;
   deleteGroup(id: string): Promise<void>;
-  updateGroup(oldName: string, newName: string): Promise<void>;
-  updateCategory(oldName: string, newName: string): Promise<void>;
+  updateGroup(id: string, newName: string): Promise<void>;
+  updateCategory(id: string, newName: string): Promise<void>;
 }
 
 // ==========================================================
@@ -97,7 +97,7 @@ export interface ICatalogRepository {
 export interface StoreState {
   transactions: Transaction[];
   accounts: Account[];
-  accountGroups: string[];
+  accountGroups: AccountGroup[];
   accountCategories: AccountCategory[];
   transactionTypes: MovementTypeItem[];
   profile: Profile | null;
@@ -120,10 +120,12 @@ export interface FinanzasStoreContextType extends StoreState {
   updateAccount: (updatedAccount: Account) => Promise<void>;
   deleteAccount: (id: string) => Promise<void>;
   addAccountGroup: (group: string) => Promise<void>;
-  updateAccountGroup: (oldName: string, newName: string) => Promise<void>;
+  // CORREGIDO: Cambiado oldName por id para alinearse al repositorio
+  updateAccountGroup: (id: string, newName: string) => Promise<void>;
   deleteAccountGroup: (group: string) => Promise<void>;
   addAccountCategory: (category: string) => Promise<void>;
-  updateAccountCategory: (oldName: string, newName: string) => Promise<void>;
+  // CORREGIDO: Cambiado oldName por id para alinearse al repositorio
+  updateAccountCategory: (id: string, newName: string) => Promise<void>;
   deleteAccountCategory: (category: string) => Promise<void>;
   setProfile: (profile: Profile | null) => void;
 }

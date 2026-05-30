@@ -222,7 +222,8 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             >
               <option value="all">Todos los Grupos</option>
               {accountGroups.map(group => (
-                <option key={group} value={group}>{group}</option>
+                // CORREGIDO: Usamos el id único para la key y group.name para el valor
+                <option key={group.id} value={group.name}>{group.name}</option>
               ))}
             </select>
           </div>
