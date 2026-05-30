@@ -101,6 +101,7 @@ export interface StoreState {
   accountCategories: AccountCategory[];
   transactionTypes: MovementTypeItem[];
   profile: Profile | null;
+  isFetching: boolean;
 }
 
 export interface FinanzasStoreContextType extends StoreState {

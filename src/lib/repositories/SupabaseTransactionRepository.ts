@@ -52,16 +52,24 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
   }
 
   async fetchAll(): Promise<Transaction[]> {
-    const { data, error } = await this.supabase
-      .from(this.TABLE_NAME)
-      .select('*');
+    try {
+      const { data, error } = await this.supabase
+        .from(this.TABLE_NAME)
+        .select('*');
 
-    if (error) {
-      throw new Error(`Error fetching transactions: ${error.message}`);
+      if (error) {
+        // Captura y expone el objeto 'error' nativo de Supabase (PostgrestError)
+        console.error('Error fetching transactions:', error);
+        throw new Error(`Error fetching transactions: ${error.message}`);
+      }
+
+      // CORREGIDO: Se añade .bind(this) para que no falle el contexto en la iteración
+      return (data as SupabaseTransactionRow[]).map(this.fromSupabase.bind(this));
+    } catch (err) {
+      // Asegura que cualquier error inesperado también sea loggeado
+      console.error('Unhandled error in fetchAll transactions:', err);
+      throw err;
     }
-
-    // CORREGIDO: Se añade .bind(this) para que no falle el contexto en la iteración
-    return (data as SupabaseTransactionRow[]).map(this.fromSupabase.bind(this));
   }
 
   async save(transaction: Omit<Transaction, 'id' | 'created_at' | 'transaction_type_code'>): Promise<void> {

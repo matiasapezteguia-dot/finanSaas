@@ -36,15 +36,30 @@ export default function Dashboard() {
     checkUser();
   }, [supabase]);
 
-  // 2. CORREGIDO: Carga de datos asincrónica estricta antes de activar la UI
+  // 2. Cableado de diagnóstico con numeración estricta
   useEffect(() => {
+    console.log("🚀 COMUNICADO 1: El useEffect del Dashboard acaba de arrancar en tu máquina.");
+    
     const initApp = async () => {
-      await fetchInitialData(); // Esperamos a que terminen los repositorios de Supabase
-      setMounted(true);        // Recién ahí le damos luz verde a React
+      console.log("🚀 COMUNICADO 2: Entrando a la función initApp().");
+      try {
+        console.log("🚀 COMUNICADO 3: Disparando fetchInitialData() hacia Supabase... (Esperando respuesta)");
+        
+        await fetchInitialData();
+        
+        console.log("🚀 COMUNICADO 4: ¡ÉXITO! Supabase respondió y la promesa se resolvió.");
+      } catch (error) {
+        console.error("🔥 COMUNICADO 4 ALTERNATIVO: Entró al CATCH. Falló la consulta:", error);
+      }
+      
+      // Sacamos el setMounted afuera de la promesa para obligar a la UI a despertar
+      console.log("🚀 COMUNICADO 5: Forzando setMounted(true) para dibujar la pantalla.");
+      setMounted(true);
     };
-    initApp();
-  }, [fetchInitialData]);
 
+    initApp();
+  }, []);
+  
   // Filtros de la tabla
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);

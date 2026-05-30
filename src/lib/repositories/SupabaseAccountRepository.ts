@@ -1,7 +1,7 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { v4 as uuidv4 } from 'uuid';
 import { Account, IAccountRepository, AccountGroup, AccountCategory, MonedaType } from '../../types/finanzas';
-import { Database } from '../../../supabase_types';
+import { Database } from '../../types/supabase_types';
 
 type AccountRow = Database['public']['Tables']['accounts']['Row'];
 type AccountInsert = Database['public']['Tables']['accounts']['Insert'];

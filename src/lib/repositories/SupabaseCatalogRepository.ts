@@ -1,5 +1,5 @@
 import { ICatalogRepository, AccountCategory, MovementTypeItem } from '../../types/finanzas';
-import { Database } from '../../../supabase_types';
+import { Database } from '../../types/supabase_types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 export class SupabaseCatalogRepository implements ICatalogRepository {
