@@ -52,13 +52,13 @@ const Tabs: React.FC<TabsProps> = ({ children }) => {
 
 const ListManager: React.FC<{
   title: string;
-  list: { id: string; name: string }[]; // More specific type for list items
+  list: { id: string; name: string }[];
   onAdd: (name: string) => void;
-   onDelete: (id: string) => void; // Changed signature
-   onUpdate: (id: string, newName: string) => void; // Changed signature
-   getItemName?: (item: { id: string; name: string }) => string; // More specific type
-   accounts?: Account[]; // Add accounts prop for deletion rule
-   renderItemExtra?: (item: { id: string; name: string }) => React.ReactNode; // More specific type
+  onDelete: (id: string) => void;
+  onUpdate: (id: string, newName: string) => void;
+  getItemName?: (item: { id: string; name: string }) => string;
+  accounts?: Account[];
+  renderItemExtra?: (item: { id: string; name: string }) => React.ReactNode;
 }> = ({ title, list, onAdd, onDelete, onUpdate, getItemName, accounts, renderItemExtra }) => {
   const [newItem, setNewItem] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,14 +71,14 @@ const ListManager: React.FC<{
     }
   };
 
-  const handleEdit = (item: { id: string; name: string }) => { // Changed parameter to object
-    setEditingId(item.id); // Store id
-    setEditingText(item.name); // Store name for editing
+  const handleEdit = (item: { id: string; name: string }) => {
+    setEditingId(item.id);
+    setEditingText(item.name);
   };
 
-  const handleSave = (id: string) => { // Changed parameter to id
+  const handleSave = (id: string) => {
     if (editingText.trim()) {
-      onUpdate(id, editingText.trim()); // Pass id and newName
+      onUpdate(id, editingText.trim());
     }
     setEditingId(null);
     setEditingText('');
@@ -89,12 +89,11 @@ const ListManager: React.FC<{
     setEditingText('');
   };
 
-  const isDeletable = (id: string) => { // Changed parameter to id
-    if (!accounts) return true; // If accounts are not provided, assume deletable
-    // Check if any account uses this category or group
-    const item = list.find(i => i.id === id); // Find item by id
-    if (!item) return true; // If item not found, assume deletable
-    return !accounts.some(account => account.categoria === item.name || account.grupo === item.name); // Check against item.name
+  const isDeletable = (id: string) => {
+    if (!accounts) return true;
+    const item = list.find(i => i.id === id);
+    if (!item) return true;
+    return !accounts.some(account => account.categoria === item.name || account.grupo === item.name);
   };
 
   return (
@@ -117,8 +116,8 @@ const ListManager: React.FC<{
       </div>
       <ul className="mt-4 border border-gray-200 rounded-md divide-y divide-gray-200">
         {list.map((item) => (
-          <li key={item.id} className="px-4 py-3 flex items-center justify-between text-sm text-gray-900"> {/* Changed key to item.id */}
-            {editingId === item.id ? ( // Changed comparison to item.id
+          <li key={item.id} className="px-4 py-3 flex items-center justify-between text-sm text-gray-900">
+            {editingId === item.id ? (
               <div className="flex-grow flex items-center space-x-2">
                 <input
                   type="text"
@@ -127,7 +126,7 @@ const ListManager: React.FC<{
                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                 />
                 <button
-                  onClick={() => handleSave(item.id)} // Pass item.id
+                  onClick={() => handleSave(item.id)}
                   className="inline-flex items-center rounded-md border border-transparent bg-green-600 px-3 py-1 text-sm font-medium text-white shadow-sm hover:bg-green-700"
                 >
                   Guardar
@@ -141,23 +140,23 @@ const ListManager: React.FC<{
               </div>
             ) : (
               <span className="flex-grow flex items-center justify-between">
-                {getItemName ? getItemName(item) : item.name} {/* Use item.name if getItemName not provided */}
+                {getItemName ? getItemName(item) : item.name}
                 {renderItemExtra && renderItemExtra(item)}
               </span>
             )}
             <div className="flex space-x-2 ml-4">
-              {editingId !== item.id && ( // Changed comparison to item.id
+              {editingId !== item.id && (
                 <button
-                  onClick={() => handleEdit(item)} // Pass item object
+                  onClick={() => handleEdit(item)}
                   className="text-indigo-600 hover:text-indigo-900"
                 >
                   Editar
                 </button>
               )}
               <button
-                onClick={() => onDelete(item.id)} // Pass item.id
+                onClick={() => onDelete(item.id)}
                 className={`text-red-600 hover:text-red-900 ${!isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''}`}
-                disabled={!isDeletable(item.id)} // Pass item.id
+                disabled={!isDeletable(item.id)}
                 title={!isDeletable(item.id) ? 'No se puede eliminar porque tiene cuentas asociadas' : ''}
               >
                 Eliminar
@@ -172,6 +171,7 @@ const ListManager: React.FC<{
 
 export default function ConfiguracionPage() {
   const [mounted, setMounted] = useState(false);
+  
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -179,7 +179,6 @@ export default function ConfiguracionPage() {
   const { 
     accountGroups,
     accountCategories,
-
     addAccountGroup,
     updateAccountGroup,
     deleteAccountGroup,
@@ -195,16 +194,30 @@ export default function ConfiguracionPage() {
   } = useFinanzasStore();
 
   useEffect(() => {
-    fetchInitialData();
-  }, []);
-
+    if (mounted) {
+      console.log("🚀 Disparando fetchInitialData de forma segura desde el cliente montado.");
+      fetchInitialData();
+    }
+  }, [mounted, fetchInitialData]);
+  
   const [newAccount, setNewAccount] = useState<Omit<Account, 'id'> & { grupo: string; categoria: string }>({
     nombre: '',
     montoInicial: 0,
     moneda: 'ARS',
-    grupo: '', // Empezamos vacío de forma segura para el servidor
-    categoria: '', // Empezamos vacío de forma segura para el servidor
+    grupo: '', 
+    categoria: '', 
   });
+
+  // CORREGIDO: Escucha cuando Supabase llena los catálogos y les asigna valores por defecto seguros en el cliente
+  useEffect(() => {
+    if (mounted && (accountGroups.length > 0 || accountCategories.length > 0)) {
+      setNewAccount(prev => ({
+        ...prev,
+        grupo: prev.grupo || (accountGroups[0]?.name || ''),
+        categoria: prev.categoria || (accountCategories[0]?.name || '')
+      }));
+    }
+  }, [mounted, accountGroups, accountCategories]);
 
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editedAccount, setEditedAccount] = useState<Account | null>(null);
@@ -215,9 +228,8 @@ export default function ConfiguracionPage() {
       setNewAccount({
         nombre: '',
         montoInicial: 0,
-        // date: new Date().toISOString().split('T')[0], // No longer needed
         moneda: 'ARS',
-        grupo: accountGroups[0] || '',
+        grupo: accountGroups[0]?.name || '',
         categoria: accountCategories[0]?.name || '',
       });
     }
@@ -258,15 +270,14 @@ export default function ConfiguracionPage() {
   };
 
   if (!mounted) {
-    return null; // O un spinner
+    return null;
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">Configuración</h1>
       <Tabs>
-
-       <Tab label="Grupos de Cuenta">
+        <Tab label="Grupos de Cuenta">
           <ListManager
             title="Grupos de Cuenta"
             list={accountGroups}
@@ -274,9 +285,8 @@ export default function ConfiguracionPage() {
             onUpdate={updateAccountGroup}
             onDelete={deleteAccountGroup}
             accounts={accounts}
-            getItemName={(group) => group.name} // Asegura consistencia de lectura
+            getItemName={(group) => group.name}
             renderItemExtra={(group: { id: string; name: string }) => {
-              // CORREGIDO: Ahora se accede a group.name para filtrar las cuentas asociadas
               const totalARS = accounts
                 .filter(a => a.grupo === group.name && a.moneda === 'ARS')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
@@ -302,6 +312,7 @@ export default function ConfiguracionPage() {
             }}
           />
         </Tab>
+
         <Tab label="Categorías de Cuenta">
           <ListManager
             title="Categorías de Cuenta"
@@ -312,7 +323,6 @@ export default function ConfiguracionPage() {
             accounts={accounts}
             getItemName={(category: { id: string; name: string }) => category.name}
             renderItemExtra={(category: { id: string; name: string }) => {
-              // CORREGIDO: Asegurado tipado explícito del objeto en lugar de usar la interfaz global rota
               const totalARS = accounts
                 .filter(a => a.categoria === category.name && a.moneda === 'ARS')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
@@ -338,6 +348,7 @@ export default function ConfiguracionPage() {
             }}
           />
         </Tab>        
+
         <Tab label="Cuentas">
           <div className="mt-4">
             <h3 className="text-lg font-medium text-gray-900">Administrar Cuentas</h3>
@@ -383,7 +394,6 @@ export default function ConfiguracionPage() {
                   onChange={(e) => setNewAccount({ ...newAccount, grupo: e.target.value })}
                 >
                   {accountGroups.map((group) => (
-                    // CORREGIDO: Usamos group.id para la key única y group.name para el valor y texto
                     <option key={group.id} value={group.name}>{group.name}</option>
                   ))}
                 </select>
@@ -465,7 +475,8 @@ export default function ConfiguracionPage() {
                                 className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                               >
                                 {accountGroups.map((group) => (
-                                  <option key={group} value={group}>{group}</option>
+                                  // CORREGIDO: Usamos group.id y group.name en modo edición
+                                  <option key={group.id} value={group.name}>{group.name}</option>
                                 ))}
                               </select>
                             </td>
@@ -531,6 +542,5 @@ export default function ConfiguracionPage() {
         </Tab>
       </Tabs>
     </div>
-
   );
 }

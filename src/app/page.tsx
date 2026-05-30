@@ -13,7 +13,7 @@ import AddTransactionModal from "@/components/modals/AddTransactionModal";
 export default function Dashboard() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
-  const supabase = createClientSupabaseClient();
+  //const supabase = createClientSupabaseClient();
   
   const { 
     transactions, 
@@ -27,38 +27,44 @@ export default function Dashboard() {
     getTotalUSD 
   } = useFinanzasStore();
 
-  // 1. Detector de usuario en consola
+  // Orquestador de inicialización inmune a congelamientos por F5
   useEffect(() => {
-    const checkUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      console.log("🚨 DETECTOR EN UI - USUARIO ACTUAL:", user);
-    };
-    checkUser();
-  }, [supabase]);
-
-  // 2. Cableado de diagnóstico con numeración estricta
-  useEffect(() => {
-    console.log("🚀 COMUNICADO 1: El useEffect del Dashboard acaba de arrancar en tu máquina.");
+    console.log("🚀 COMUNICADO 1: El useEffect del Dashboard arrancó.");
     
-    const initApp = async () => {
-      console.log("🚀 COMUNICADO 2: Entrando a la función initApp().");
-      try {
-        console.log("🚀 COMUNICADO 3: Disparando fetchInitialData() hacia Supabase... (Esperando respuesta)");
-        
-        await fetchInitialData();
-        
-        console.log("🚀 COMUNICADO 4: ¡ÉXITO! Supabase respondió y la promesa se resolvió.");
-      } catch (error) {
-        console.error("🔥 COMUNICADO 4 ALTERNATIVO: Entró al CATCH. Falló la consulta:", error);
-      }
+    const supabaseInstance = createClientSupabaseClient();
+    
+    console.log("⏳ Escuchando canal de autenticación reactivo de Supabase...");
+    
+    // onAuthStateChange se ejecuta INSTANTÁNEAMENTE en el cliente, evitando el congelamiento de cookies
+    const { data: { subscription } } = supabaseInstance.auth.onAuthStateChange(async (event, session) => {
+      console.log("🔄 EVENTO DE AUTENTICACIÓN DETECTADO:", event, session ? "Hay sesión" : "No hay sesión");
       
-      // Sacamos el setMounted afuera de la promesa para obligar a la UI a despertar
-      console.log("🚀 COMUNICADO 5: Forzando setMounted(true) para dibujar la pantalla.");
-      setMounted(true);
-    };
+      // Manejamos los dos estados posibles de forma asíncrona controlada
+      if (event === 'SIGNED_IN' || session) {
+        console.log("🔑 Sesión confirmada para:", session?.user?.email);
+        
+        try {
+          // Si el store ya tiene datos o está cargando, evitamos duplicar la consulta
+          console.log("🚀 COMUNICADO 3: Disparando fetchInitialData() con sesión asegurada.");
+          await fetchInitialData();
+          console.log("🚀 COMUNICADO 4: ¡ÉXITO! Datos del Store sincronizados.");
+          
+          setMounted(true); // Despierta la pantalla
+        } catch (error) {
+          console.error("🔥 Error al cargar datos del Store:", error);
+        }
+      } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
+        // INITIAL_SESSION ocurre de inmediato si Supabase lee que no hay nadie logueado
+        console.log("⚠️ No hay sesión activa. Redirigiendo a /login.");
+        router.push("/login");
+      }
+    });
 
-    initApp();
-  }, []);
+    // Limpieza del listener cuando el componente se desmonte
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchInitialData, router]);
   
   // Filtros de la tabla
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -90,7 +96,7 @@ export default function Dashboard() {
     setSelectedAccountId(null);
   };
 
-  // Salvavidas de hidratación: si no cargaron los datos reales en el cliente, no dibujamos nada
+  // Salvavidas de hidratación: si no cargaron los datos reales en el cliente, mostramos estado de carga seguro
   if (!mounted) {
     return <div className="min-h-screen bg-slate-50 w-full flex items-center justify-center text-slate-400 text-sm">Cargando panel financiero...</div>;
   }
@@ -107,14 +113,15 @@ export default function Dashboard() {
           <button 
             onClick={async () => {
               try {
-                await supabase.auth.signOut();
-                localStorage.clear(); // Limpieza preventiva para que no se tilde el token viejo
+                const supabaseInstance = createClientSupabaseClient();
+                await supabaseInstance.auth.signOut();
+                localStorage.clear(); 
                 sessionStorage.clear();
                 router.push("/login");
-                router.refresh();     // Obligamos a Next.js a resetear el mapa de rutas
+                router.refresh();     
               } catch (err) {
                 console.error("Error al cerrar sesión:", err);
-                window.location.href = "/login"; // Hard redirect si falla el router
+                window.location.href = "/login"; 
               }
             }}
             className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-600 transition"
