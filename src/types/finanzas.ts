@@ -30,11 +30,17 @@ export interface MovementTypeItem {
 export interface Account {
   id: string;
   nombre: string;
-  grupo: string | null;      // Nombre o ID del grupo dependiente de UI
-  categoria: string | null;  // Nombre o ID de categoría dependiente de UI
-  moneda: MonedaType;
+  account_group_id: string;    // 🔑 ID real (UUID) relacional de la base de datos
+  account_category_id: string; // 🔑 ID real (UUID) relacional de la base de datos
+  moneda: 'ARS' | 'USD';
   montoInicial: number;
   created_at?: string;
+  
+  // 🔄 CAPA DE COMPATIBILIDAD VIRTUAL:
+  // El Store rellenará estas dos propiedades con el texto del catálogo al hacer el fetch.
+  // De esta manera, el Dashboard y el 90% de las tablas no se enteran del cambio y siguen sanas.
+  grupo: string;     
+  categoria: string; 
 }
 
 export interface Transaction {

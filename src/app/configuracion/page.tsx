@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useFinanzasStore } from '../../lib/store';
-import { Account, AccountCategory } from '../../types/finanzas';
+import { Account } from '../../types/finanzas';
 
 interface TabProps {
   label: string;
@@ -28,24 +28,23 @@ const Tabs: React.FC<TabsProps> = ({ children }) => {
             <button
               key={child.props.label}
               onClick={() => setActiveTab(child.props.label)}
-              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${activeTab === child.props.label
-                ? 'border-indigo-500 text-indigo-600'
-                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-                }`}
+              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
+                activeTab === child.props.label
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+              }`}
             >
               {child.props.label}
             </button>
           ))}
         </nav>
       </div>
-      {
-        children.map((child) => {
-          if (child.props.label === activeTab) {
-            return <div key={child.props.label}>{child.props.children}</div>;
-          }
-          return null;
-        })
-      }
+      {children.map((child) => {
+        if (child.props.label === activeTab) {
+          return <div key={child.props.label}>{child.props.children}</div>;
+        }
+        return null;
+      })}
     </div>
   );
 };
@@ -91,9 +90,9 @@ const ListManager: React.FC<{
 
   const isDeletable = (id: string) => {
     if (!accounts) return true;
-    const item = list.find(i => i.id === id);
+    const item = list.find((i) => i.id === id);
     if (!item) return true;
-    return !accounts.some(account => account.categoria === item.name || account.grupo === item.name);
+    return !accounts.some((account) => account.categoria === item.name || account.grupo === item.name);
   };
 
   return (
@@ -146,16 +145,15 @@ const ListManager: React.FC<{
             )}
             <div className="flex space-x-2 ml-4">
               {editingId !== item.id && (
-                <button
-                  onClick={() => handleEdit(item)}
-                  className="text-indigo-600 hover:text-indigo-900"
-                >
+                <button onClick={() => handleEdit(item)} className="text-indigo-600 hover:text-indigo-900">
                   Editar
                 </button>
               )}
               <button
                 onClick={() => onDelete(item.id)}
-                className={`text-red-600 hover:text-red-900 ${!isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''}`}
+                className={`text-red-600 hover:text-red-900 ${
+                  !isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
+                }`}
                 disabled={!isDeletable(item.id)}
                 title={!isDeletable(item.id) ? 'No se puede eliminar porque tiene cuentas asociadas' : ''}
               >
@@ -191,7 +189,7 @@ export default function ConfiguracionPage() {
     getAccountBalance,
     updateAccount,
     fetchInitialData,
-    transactions
+    transactions,
   } = useFinanzasStore();
 
   useEffect(() => {
@@ -201,21 +199,22 @@ export default function ConfiguracionPage() {
     }
   }, [mounted, fetchInitialData]);
 
-  const [newAccount, setNewAccount] = useState<Omit<Account, 'id'> & { grupo: string; categoria: string }>({
+  // 🏆 BUENA PRÁCTICA: Inicializamos el formulario usando las propiedades de ID relacionales directas
+  const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'categoria'> & { account_group_id: string; account_category_id: string }>({
     nombre: '',
     montoInicial: 0,
     moneda: 'ARS',
-    grupo: '',
-    categoria: '',
+    account_group_id: '',
+    account_category_id: '',
   });
 
-  // CORREGIDO: Escucha cuando Supabase llena los catálogos y les asigna valores por defecto seguros en el cliente
+  // Escucha cuando Supabase llena los catálogos y les asigna los IDs iniciales por defecto seguros
   useEffect(() => {
     if (mounted && (accountGroups.length > 0 || accountCategories.length > 0)) {
-      setNewAccount(prev => ({
+      setNewAccount((prev) => ({
         ...prev,
-        grupo: prev.grupo || (accountGroups[0]?.name || ''),
-        categoria: prev.categoria || (accountCategories[0]?.name || '')
+        account_group_id: prev.account_group_id || (accountGroups[0]?.id || ''),
+        account_category_id: prev.account_category_id || (accountCategories[0]?.id || ''),
       }));
     }
   }, [mounted, accountGroups, accountCategories]);
@@ -224,14 +223,15 @@ export default function ConfiguracionPage() {
   const [editedAccount, setEditedAccount] = useState<Account | null>(null);
 
   const handleAddAccount = () => {
-    if (newAccount.nombre && newAccount.montoInicial >= 0 && newAccount.grupo && newAccount.categoria) {
-      addAccount(newAccount);
+    // Validamos usando la existencia de los IDs obligatorios
+    if (newAccount.nombre && newAccount.montoInicial >= 0 && newAccount.account_group_id && newAccount.account_category_id) {
+      addAccount(newAccount as any);
       setNewAccount({
         nombre: '',
         montoInicial: 0,
         moneda: 'ARS',
-        grupo: accountGroups[0]?.name || '',
-        categoria: accountCategories[0]?.name || '',
+        account_group_id: accountGroups[0]?.id || '',
+        account_category_id: accountCategories[0]?.id || '',
       });
     }
   };
@@ -254,13 +254,26 @@ export default function ConfiguracionPage() {
     setEditedAccount(null);
   };
 
-  const handleDeleteAccount = (accountId: string) => {
-    const accountToDelete = accounts.find(acc => acc.id === accountId);
+const handleDeleteAccount = (accountId: string) => {
+    // 🔒 CANDADO CONTABLE: Bloqueo estricto si registra movimientos en el historial
+    const tieneMovimientos = transactions.some((t) => t.cuentaId === accountId);
+
+    if (tieneMovimientos) {
+      window.alert(
+        "No es posible eliminar esta cuenta porque registra movimientos históricos en tu base de datos. Si ya no la usás, te recomendamos dejarla con saldo cero."
+      );
+      return;
+    }
+
+    // Si no tiene movimientos, pasa a la validación de saldo actual por seguridad residual
+    const accountToDelete = accounts.find((acc) => acc.id === accountId);
     if (accountToDelete) {
       const currentBalance = getAccountBalance(accountId);
       if (currentBalance !== 0) {
         const confirmDelete = window.confirm(
-          `¡Atención! Esta cuenta tiene un saldo activo de ${currentBalance.toLocaleString("es-AR", { minimumFractionDigits: 2 })}. Si la eliminas, podrías generar inconsistencias en los balances históricos. ¿Estás seguro de que deseas eliminarla de todas formas?`
+          `¡Atención! Esta cuenta tiene un saldo activo de ${currentBalance.toLocaleString("es-AR", {
+            minimumFractionDigits: 2,
+          })}. Si la eliminas, podrías generar inconsistencias en los balances históricos. ¿Estás seguro de que deseas eliminarla de todas formas?`
         );
         if (!confirmDelete) {
           return;
@@ -289,11 +302,11 @@ export default function ConfiguracionPage() {
             getItemName={(group) => group.name}
             renderItemExtra={(group: { id: string; name: string }) => {
               const totalARS = accounts
-                .filter(a => a.grupo === group.name && a.moneda === 'ARS')
+                .filter((a) => a.grupo === group.name && a.moneda === 'ARS')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
 
               const totalUSD = accounts
-                .filter(a => a.grupo === group.name && a.moneda === 'USD')
+                .filter((a) => a.grupo === group.name && a.moneda === 'USD')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
 
               const formatCurrency = (value: number, currency: 'ARS' | 'USD') => {
@@ -325,11 +338,11 @@ export default function ConfiguracionPage() {
             getItemName={(category: { id: string; name: string }) => category.name}
             renderItemExtra={(category: { id: string; name: string }) => {
               const totalARS = accounts
-                .filter(a => a.categoria === category.name && a.moneda === 'ARS')
+                .filter((a) => a.categoria === category.name && a.moneda === 'ARS')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
 
               const totalUSD = accounts
-                .filter(a => a.categoria === category.name && a.moneda === 'USD')
+                .filter((a) => a.categoria === category.name && a.moneda === 'USD')
                 .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
 
               const formatCurrency = (value: number, currency: 'ARS' | 'USD') => {
@@ -349,6 +362,7 @@ export default function ConfiguracionPage() {
             }}
           />
         </Tab>
+
         <Tab label="Cuentas">
           <div className="mt-4">
             <h3 className="text-lg font-medium text-gray-900">Administrar Cuentas</h3>
@@ -390,12 +404,13 @@ export default function ConfiguracionPage() {
                 <select
                   id="accountGroup"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  value={newAccount.grupo}
-                  onChange={(e) => setNewAccount({ ...newAccount, grupo: e.target.value })}
+                  value={newAccount.account_group_id}
+                  // 🏆 ENVIAMOS ID DIRECTO: Se conecta nativamente al Store relacional
+                  onChange={(e) => setNewAccount({ ...newAccount, account_group_id: e.target.value })}
                 >
                   <option value="">Seleccionar Grupo...</option>
                   {accountGroups.map((group) => (
-                    <option key={group.id} value={group.name}>{group.name}</option>
+                    <option key={group.id} value={group.id}>{group.name}</option>
                   ))}
                 </select>
               </div>
@@ -404,12 +419,13 @@ export default function ConfiguracionPage() {
                 <select
                   id="accountCategory"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                  value={newAccount.categoria}
-                  onChange={(e) => setNewAccount({ ...newAccount, categoria: e.target.value })}
+                  value={newAccount.account_category_id}
+                  // 🏆 ENVIAMOS ID DIRECTO: Se conecta nativamente al Store relacional
+                  onChange={(e) => setNewAccount({ ...newAccount, account_category_id: e.target.value })}
                 >
                   <option value="">Seleccionar Categoría...</option>
                   {accountCategories.map((category) => (
-                    <option key={category.id} value={category.name}>{category.name}</option>
+                    <option key={category.id} value={category.id}>{category.name}</option>
                   ))}
                 </select>
               </div>
@@ -438,14 +454,12 @@ export default function ConfiguracionPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {accounts.map((account) => {
-                      // 🔒 CANDADO CONTABLE: Verificamos en el milisegundo si la cuenta tiene transacciones asociadas
-                      const tieneTransacciones = transactions.some(t => t.cuentaId === account.id);
+                      const tieneTransacciones = transactions.some((t) => t.cuentaId === account.id);
 
                       return (
                         <tr key={account.id}>
                           {editingAccountId === account.id ? (
                             <>
-                              {/* Campo Nombre: Siempre editable */}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <input
                                   type="text"
@@ -455,7 +469,6 @@ export default function ConfiguracionPage() {
                                 />
                               </td>
 
-                              {/* Campo Moneda: BLOQUEADO si tiene transacciones */}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <select
                                   value={editedAccount?.moneda || 'ARS'}
@@ -469,7 +482,6 @@ export default function ConfiguracionPage() {
                                 </select>
                               </td>
 
-                              {/* Campo Monto Inicial: BLOQUEADO si tiene transacciones */}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <input
                                   type="number"
@@ -481,38 +493,41 @@ export default function ConfiguracionPage() {
                                 />
                               </td>
 
-                              {/* Saldo Actual (Informativo, calculado por el Store) */}
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
-                                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: editedAccount?.moneda || 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(getAccountBalance(account.id))}
+                                {new Intl.NumberFormat('es-AR', {
+                                  style: 'currency',
+                                  currency: editedAccount?.moneda || 'ARS',
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                }).format(getAccountBalance(account.id))}
                               </td>
 
-                              {/* Campo Grupo: Siempre editable */}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <select
-                                  value={editedAccount?.grupo || ''}
-                                  onChange={(e) => setEditedAccount({ ...editedAccount!, grupo: e.target.value })}
+                                  value={editedAccount?.account_group_id || ''}
+                                  // 🏆 ENVIAMOS ID DIRECTO EN LA EDICIÓN
+                                  onChange={(e) => setEditedAccount({ ...editedAccount!, account_group_id: e.target.value })}
                                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                                 >
                                   {accountGroups.map((group) => (
-                                    <option key={group.id} value={group.name}>{group.name}</option>
+                                    <option key={group.id} value={group.id}>{group.name}</option>
                                   ))}
                                 </select>
                               </td>
 
-                              {/* Campo Categoría: Siempre editable */}
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <select
-                                  value={editedAccount?.categoria || ''}
-                                  onChange={(e) => setEditedAccount({ ...editedAccount!, categoria: e.target.value })}
+                                  value={editedAccount?.account_category_id || ''}
+                                  // 🏆 ENVIAMOS ID DIRECTO EN LA EDICIÓN
+                                  onChange={(e) => setEditedAccount({ ...editedAccount!, account_category_id: e.target.value })}
                                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                                 >
                                   {accountCategories.map((category) => (
-                                    <option key={category.id} value={category.name}>{category.name}</option>
+                                    <option key={category.id} value={category.id}>{category.name}</option>
                                   ))}
                                 </select>
                               </td>
 
-                              {/* Acciones de Guardar/Cancelar */}
                               <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                                 <button
                                   onClick={handleSaveAccount}
@@ -520,17 +535,14 @@ export default function ConfiguracionPage() {
                                 >
                                   Guardar
                                 </button>
-                                <button
-                                  onClick={handleCancelEditAccount}
-                                  className="text-gray-600 hover:text-gray-900"
-                                >
+                                <button onClick={handleCancelEditAccount} className="text-gray-600 hover:text-gray-900">
                                   Cancelar
                                 </button>
                               </td>
                             </>
                           ) : (
                             <>
-                              {/* ... Este es el bloque del modo lectura (el que ya tenías), queda exactamente igual ... */}
+                              {/* MODO LECTURA: Sigue renderizando `.grupo` y `.categoria` (el texto virtual del Store híbrido), por ende la UI no se rompe */}
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{account.nombre}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.moneda}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.montoInicial.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
@@ -548,7 +560,11 @@ export default function ConfiguracionPage() {
                                 </button>
                                 <button
                                   onClick={() => handleDeleteAccount(account.id)}
-                                  className="text-red-600 hover:text-red-900"
+                                  className={`text-red-600 hover:text-red-900 ${
+                                    tieneTransacciones ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
+                                  }`}
+                                  disabled={tieneTransacciones}
+                                  title={tieneTransacciones ? 'No se puede eliminar porque tiene transacciones asociadas' : ''}
                                 >
                                   Eliminar
                                 </button>

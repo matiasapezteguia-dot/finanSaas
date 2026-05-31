@@ -56,7 +56,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
 
     console.log("⚡ ¡Ráfaga exitosa! Datos base sincronizados.");
 
-    // 🔄 TRADUCTOR CONTABLE: Mapeamos el esquema real de la base de datos (IDs) a los nombres de texto que espera tu UI
+    // 🔄 HIDRATACIÓN EN CALIENTE HÍBRIDA: Inyectamos los IDs reales para la lógica y resolvemos los nombres legibles para la UI antigua
     const mappedAccounts: Account[] = rawAccounts.map((acc) => {
       const grupoObj = accountGroups.find(g => g.id === acc.account_group_id);
       const catObj = accountCategories.find(c => c.id === acc.account_category_id);
@@ -66,6 +66,12 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
         nombre: acc.name || 'Sin Nombre',
         moneda: (acc.currency as 'ARS' | 'USD') || 'ARS',
         montoInicial: Number(acc.initial_amount) || 0,
+        
+        // 🔑 IDs reales para persistencia limpia y encapsulada
+        account_group_id: acc.account_group_id || '',
+        account_category_id: acc.account_category_id || '',
+        
+        // 🔄 Campos calculados virtuales de compatibilidad (evitan romper el Dashboard)
         grupo: grupoObj ? grupoObj.name : 'Otros',
         categoria: catObj ? catObj.name : 'Sin Categoría'
       };
@@ -118,20 +124,13 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    // 3. OPERACIONES DE CUENTAS DESACOPLADAS (Mapeo Fiel al Esquema Real de la BD de tu captura)
+    // 3. OPERACIONES DE CUENTAS ENCAPSULADAS (Puras, limpias y basadas en IDs)
     addAccount: async (nuevaCuenta) => {
       try {
         const supabase = createClientSupabaseClient();
-        console.log("📝 Mapeando cuenta nueva hacia el esquema real de la BD:", nuevaCuenta);
+        console.log("📝 Insertando cuenta de forma directa usando IDs limpios:", nuevaCuenta);
 
-        const grupoEncontrado = get().accountGroups.find(g => g.name === nuevaCuenta.grupo);
-        const categoriaEncontrada = get().accountCategories.find(c => c.name === nuevaCuenta.categoria);
-
-        if (!grupoEncontrado || !categoriaEncontrada) {
-          console.error("❌ Error: El grupo o la categoría seleccionada no tienen un ID válido en el Store.");
-          return;
-        }
-
+        // 🚀 ELIMINADAS LAS BÚSQUEDAS POR TEXTO: Los datos ya llegan con los IDs desde el componente visual
         const { error } = await supabase
           .from('accounts')
           .insert([{
@@ -139,12 +138,12 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
             currency: nuevaCuenta.moneda,
             initial_amount: nuevaCuenta.montoInicial,
             current_amount: nuevaCuenta.montoInicial,
-            account_group_id: grupoEncontrado.id,
-            account_category_id: categoriaEncontrada.id
+            account_group_id: nuevaCuenta.account_group_id,     // ID directo
+            account_category_id: nuevaCuenta.account_category_id // ID directo
           }]);
 
         if (error) throw error;
-        console.log("✅ Cuenta guardada exitosamente en Supabase.");
+        console.log("✅ Cuenta guardada exitosamente.");
         await get().fetchInitialData();
       } catch (err) {
         console.error('🔥 Error al insertar cuenta mapeada:', err);
@@ -154,24 +153,17 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     updateAccount: async (cuentaModificada) => {
       try {
         const supabase = createClientSupabaseClient();
-        console.log(`📝 Mapeando actualización para cuenta ID: ${cuentaModificada.id}`);
+        console.log(`📝 Actualizando cuenta ID de forma directa usando IDs limpios: ${cuentaModificada.id}`);
 
-        const grupoEncontrado = get().accountGroups.find(g => g.name === cuentaModificada.grupo);
-        const categoriaEncontrada = get().accountCategories.find(c => c.name === cuentaModificada.categoria);
-
-        if (!grupoEncontrado || !categoriaEncontrada) {
-          console.error("❌ Error: Al actualizar, el grupo o la categoría no se encontraron en el catálogo.");
-          return;
-        }
-
+        // 🚀 ELIMINADAS LAS BÚSQUEDAS POR TEXTO: Modificación directa e inmediata
         const { error } = await supabase
           .from('accounts')
           .update({
             name: cuentaModificada.nombre,
             currency: cuentaModificada.moneda,
             initial_amount: cuentaModificada.montoInicial,
-            account_group_id: grupoEncontrado.id,
-            account_category_id: categoriaEncontrada.id
+            account_group_id: cuentaModificada.account_group_id,     // ID directo
+            account_category_id: cuentaModificada.account_category_id // ID directo
           })
           .eq('id', cuentaModificada.id);
 
@@ -183,7 +175,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    deleteAccount: async (id) => {
+    deleteAccount: async (id: string) => {
       try {
         const supabase = createClientSupabaseClient();
         console.log(`🗑️ Eliminando cuenta ID: ${id}`);
