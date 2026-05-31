@@ -2,8 +2,6 @@ import { create, StoreApi } from 'zustand';
 import { Account, Transaction, StoreState, AccountCategory, FinanzasStoreContextType, MonedaType } from '../types/finanzas';
 import { createClientSupabaseClient } from '../utils/supabase/client';
 import { SupabaseTransactionRepository } from './repositories/SupabaseTransactionRepository';
-import { SupabaseAccountRepository } from './repositories/SupabaseAccountRepository';
-import { SupabaseCatalogRepository } from './repositories/SupabaseCatalogRepository';
 
 const initialState: StoreState = {
   transactions: [],
@@ -23,47 +21,62 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
     return;
   }
   
-  // Forzamos el flag para indicar que estamos consultando
   set({ isFetching: true });
 
   try {
     const supabaseTransactionRepository = new SupabaseTransactionRepository(globalSupabase);
-    const supabaseAccountRepository = new SupabaseAccountRepository(globalSupabase);
 
     console.log("🕵️‍♂️ DETECTOR: Iniciando ráfaga paralela de alta velocidad hacia Supabase...");
 
-    // Disparamos las 5 consultas en simultáneo por el mismo caño
+    // Disparamos las 5 consultas en simultáneo directo por el mismo caño sin repositorios rotos
     const [
       groupsRes,
       categoriesRes,
       typesRes,
       transactions,
-      accounts
+      accountsRes
     ] = await Promise.all([
       globalSupabase.from('account_groups').select('id, name'),
       globalSupabase.from('account_categories').select('id, name'),
       globalSupabase.from('transaction_types').select('id, name, code'),
       supabaseTransactionRepository.fetchAll(),
-      supabaseAccountRepository.fetchAll()
+      globalSupabase.from('accounts').select('id, name, currency, initial_amount, account_group_id, account_category_id')
     ]);
 
-    // Validamos errores de los catálogos directos
+    // Validamos errores de las consultas directas
     if (groupsRes.error) throw groupsRes.error;
     if (categoriesRes.error) throw categoriesRes.error;
     if (typesRes.error) throw typesRes.error;
+    if (accountsRes.error) throw accountsRes.error;
 
     const accountGroups = groupsRes.data || [];
     const accountCategories = categoriesRes.data || [];
     const transactionTypes = typesRes.data || [];
+    const rawAccounts = accountsRes.data || [];
 
-    console.log("⚡ ¡Ráfaga exitosa! Datos sincronizados en paralelo.");
+    console.log("⚡ ¡Ráfaga exitosa! Datos base sincronizados.");
+
+    // 🔄 TRADUCTOR CONTABLE: Mapeamos el esquema real de la base de datos (IDs) a los nombres de texto que espera tu UI
+    const mappedAccounts: Account[] = rawAccounts.map((acc) => {
+      const grupoObj = accountGroups.find(g => g.id === acc.account_group_id);
+      const catObj = accountCategories.find(c => c.id === acc.account_category_id);
+
+      return {
+        id: acc.id,
+        nombre: acc.name || 'Sin Nombre',
+        moneda: (acc.currency as 'ARS' | 'USD') || 'ARS',
+        montoInicial: Number(acc.initial_amount) || 0,
+        grupo: grupoObj ? grupoObj.name : 'Otros',
+        categoria: catObj ? catObj.name : 'Sin Categoría'
+      };
+    });
 
     set({
       accountGroups: accountGroups as any[],
       accountCategories: accountCategories as any[],
       transactionTypes: transactionTypes as any[],
-      transactions,
-      accounts
+      transactions: transactions || [],
+      accounts: mappedAccounts
     });
     
     console.log("🎉 ¡ÉXITO TOTAL! Todo el Store se actualizó correctamente tras el F5.");
@@ -105,37 +118,86 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    // 3. OPERACIONES DE CUENTAS DESACOPLADAS
+    // 3. OPERACIONES DE CUENTAS DESACOPLADAS (Mapeo Fiel al Esquema Real de la BD de tu captura)
     addAccount: async (nuevaCuenta) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseAccountRepository = new SupabaseAccountRepository(supabase);
-        await supabaseAccountRepository.save(nuevaCuenta);
+        console.log("📝 Mapeando cuenta nueva hacia el esquema real de la BD:", nuevaCuenta);
+
+        const grupoEncontrado = get().accountGroups.find(g => g.name === nuevaCuenta.grupo);
+        const categoriaEncontrada = get().accountCategories.find(c => c.name === nuevaCuenta.categoria);
+
+        if (!grupoEncontrado || !categoriaEncontrada) {
+          console.error("❌ Error: El grupo o la categoría seleccionada no tienen un ID válido en el Store.");
+          return;
+        }
+
+        const { error } = await supabase
+          .from('accounts')
+          .insert([{
+            name: nuevaCuenta.nombre,
+            currency: nuevaCuenta.moneda,
+            initial_amount: nuevaCuenta.montoInicial,
+            current_amount: nuevaCuenta.montoInicial,
+            account_group_id: grupoEncontrado.id,
+            account_category_id: categoriaEncontrada.id
+          }]);
+
+        if (error) throw error;
+        console.log("✅ Cuenta guardada exitosamente en Supabase.");
         await get().fetchInitialData();
       } catch (err) {
-        console.error('Error al delegar creación de cuenta:', err);
+        console.error('🔥 Error al insertar cuenta mapeada:', err);
       }
     },
 
     updateAccount: async (cuentaModificada) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseAccountRepository = new SupabaseAccountRepository(supabase);
-        await supabaseAccountRepository.update(cuentaModificada);
+        console.log(`📝 Mapeando actualización para cuenta ID: ${cuentaModificada.id}`);
+
+        const grupoEncontrado = get().accountGroups.find(g => g.name === cuentaModificada.grupo);
+        const categoriaEncontrada = get().accountCategories.find(c => c.name === cuentaModificada.categoria);
+
+        if (!grupoEncontrado || !categoriaEncontrada) {
+          console.error("❌ Error: Al actualizar, el grupo o la categoría no se encontraron en el catálogo.");
+          return;
+        }
+
+        const { error } = await supabase
+          .from('accounts')
+          .update({
+            name: cuentaModificada.nombre,
+            currency: cuentaModificada.moneda,
+            initial_amount: cuentaModificada.montoInicial,
+            account_group_id: grupoEncontrado.id,
+            account_category_id: categoriaEncontrada.id
+          })
+          .eq('id', cuentaModificada.id);
+
+        if (error) throw error;
+        console.log("✅ Cuenta actualizada exitosamente.");
         await get().fetchInitialData();
       } catch (err) {
-        console.error('Error al delegar actualización de cuenta:', err);
+        console.error('🔥 Error al actualizar cuenta mapeada:', err);
       }
     },
 
     deleteAccount: async (id) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseAccountRepository = new SupabaseAccountRepository(supabase);
-        await supabaseAccountRepository.delete(id);
+        console.log(`🗑️ Eliminando cuenta ID: ${id}`);
+        
+        const { error } = await supabase
+          .from('accounts')
+          .delete()
+          .eq('id', id);
+
+        if (error) throw error;
+        console.log("✅ Cuenta eliminada con éxito.");
         await get().fetchInitialData();
       } catch (err) {
-        console.error('Error al delegar eliminación de cuenta:', err);
+        console.error('🔥 Error al eliminar cuenta:', err);
       }
     },
 
@@ -148,7 +210,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           .insert([{ name }]);
           
         if (error) throw error;
-        await get().fetchInitialData(); // Recarga limpia en ráfaga paralela
+        await get().fetchInitialData();
       } catch (error) {
         console.error("🔥 Error directo al agregar grupo:", error);
       }
@@ -157,7 +219,6 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     updateAccountGroup: async (id: string, newName: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        console.log(`📝 Actualizando grupo ID: ${id} a nuevo nombre: ${newName}`);
         const { error } = await supabase
           .from('account_groups')
           .update({ name: newName })
@@ -173,7 +234,6 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     deleteAccountGroup: async (id: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        console.log(`🗑️ Eliminando grupo ID de forma directa: ${id}`);
         const { error } = await supabase
           .from('account_groups')
           .delete()
@@ -203,7 +263,6 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     updateAccountCategory: async (id: string, newName: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        console.log(`📝 Actualizando categoría ID: ${id} a nuevo nombre: ${newName}`);
         const { error } = await supabase
           .from('account_categories')
           .update({ name: newName })
@@ -219,7 +278,6 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     deleteAccountCategory: async (id: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        console.log(`🗑️ Eliminando categoría ID de forma directa: ${id}`);
         const { error } = await supabase
           .from('account_categories')
           .delete()

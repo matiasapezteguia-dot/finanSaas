@@ -171,12 +171,12 @@ const ListManager: React.FC<{
 
 export default function ConfiguracionPage() {
   const [mounted, setMounted] = useState(false);
-  
+
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  const { 
+  const {
     accountGroups,
     accountCategories,
     addAccountGroup,
@@ -191,6 +191,7 @@ export default function ConfiguracionPage() {
     getAccountBalance,
     updateAccount,
     fetchInitialData,
+    transactions
   } = useFinanzasStore();
 
   useEffect(() => {
@@ -199,13 +200,13 @@ export default function ConfiguracionPage() {
       fetchInitialData();
     }
   }, [mounted, fetchInitialData]);
-  
+
   const [newAccount, setNewAccount] = useState<Omit<Account, 'id'> & { grupo: string; categoria: string }>({
     nombre: '',
     montoInicial: 0,
     moneda: 'ARS',
-    grupo: '', 
-    categoria: '', 
+    grupo: '',
+    categoria: '',
   });
 
   // CORREGIDO: Escucha cuando Supabase llena los catálogos y les asigna valores por defecto seguros en el cliente
@@ -293,7 +294,7 @@ export default function ConfiguracionPage() {
 
               const totalUSD = accounts
                 .filter(a => a.grupo === group.name && a.moneda === 'USD')
-                .reduce((acc, a) => acc + getAccountBalance(a.id), 0);            
+                .reduce((acc, a) => acc + getAccountBalance(a.id), 0);
 
               const formatCurrency = (value: number, currency: 'ARS' | 'USD') => {
                 return new Intl.NumberFormat('es-AR', {
@@ -347,8 +348,7 @@ export default function ConfiguracionPage() {
               );
             }}
           />
-        </Tab>        
-
+        </Tab>
         <Tab label="Cuentas">
           <div className="mt-4">
             <h3 className="text-lg font-medium text-gray-900">Administrar Cuentas</h3>
@@ -370,7 +370,7 @@ export default function ConfiguracionPage() {
                   id="initialAmount"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={newAccount.montoInicial}
-                  onChange={(e) => setNewAccount({ ...newAccount, montoInicial: parseFloat(e.target.value) })}
+                  onChange={(e) => setNewAccount({ ...newAccount, montoInicial: parseFloat(e.target.value) || 0 })}
                 />
               </div>
               <div>
@@ -393,6 +393,7 @@ export default function ConfiguracionPage() {
                   value={newAccount.grupo}
                   onChange={(e) => setNewAccount({ ...newAccount, grupo: e.target.value })}
                 >
+                  <option value="">Seleccionar Grupo...</option>
                   {accountGroups.map((group) => (
                     <option key={group.id} value={group.name}>{group.name}</option>
                   ))}
@@ -406,6 +407,7 @@ export default function ConfiguracionPage() {
                   value={newAccount.categoria}
                   onChange={(e) => setNewAccount({ ...newAccount, categoria: e.target.value })}
                 >
+                  <option value="">Seleccionar Categoría...</option>
                   {accountCategories.map((category) => (
                     <option key={category.id} value={category.name}>{category.name}</option>
                   ))}
@@ -435,105 +437,127 @@ export default function ConfiguracionPage() {
                     </tr>
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
-                    {accounts.map((account) => (
-                      <tr key={account.id}>
-                        {editingAccountId === account.id ? (
-                          <>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <input
-                                type="text"
-                                value={editedAccount?.nombre || ''}
-                                onChange={(e) => setEditedAccount({ ...editedAccount!, nombre: e.target.value })}
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                              />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <select
-                                value={editedAccount?.moneda || 'ARS'}
-                                onChange={(e) => setEditedAccount({ ...editedAccount!, moneda: e.target.value as 'ARS' | 'USD' })}
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                              >
-                                <option value="ARS">ARS</option>
-                                <option value="USD">USD</option>
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <input
-                                type="number"
-                                value={editedAccount?.montoInicial || 0}
-                                onChange={(e) => setEditedAccount({ ...editedAccount!, montoInicial: parseFloat(e.target.value) })}
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                              />
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
-                              {new Intl.NumberFormat('es-AR', { style: 'currency', currency: editedAccount?.moneda || 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(getAccountBalance(account.id))}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <select
-                                value={editedAccount?.grupo || ''}
-                                onChange={(e) => setEditedAccount({ ...editedAccount!, grupo: e.target.value })}
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                              >
-                                {accountGroups.map((group) => (
-                                  // CORREGIDO: Usamos group.id y group.name en modo edición
-                                  <option key={group.id} value={group.name}>{group.name}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                              <select
-                                value={editedAccount?.categoria || ''}
-                                onChange={(e) => setEditedAccount({ ...editedAccount!, categoria: e.target.value })}
-                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                              >
-                                {accountCategories.map((category) => (
-                                  <option key={category.id} value={category.name}>{category.name}</option>
-                                ))}
-                              </select>
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                onClick={handleSaveAccount}
-                                className="text-green-600 hover:text-green-900 mr-2"
-                              >
-                                Guardar
-                              </button>
-                              <button
-                                onClick={handleCancelEditAccount}
-                                className="text-gray-600 hover:text-gray-900"
-                              >
-                                Cancelar
-                              </button>
-                            </td>
-                          </>
-                        ) : (
-                          <>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{account.nombre}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.moneda}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.montoInicial.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
-                              {new Intl.NumberFormat('es-AR', { style: 'currency', currency: account.moneda, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(getAccountBalance(account.id))}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.grupo}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.categoria}</td>
-                            <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                              <button
-                                onClick={() => handleEditAccount(account)}
-                                className="text-indigo-600 hover:text-indigo-900 mr-2"
-                              >
-                                Editar
-                              </button>
-                              <button
-                                onClick={() => handleDeleteAccount(account.id)}
-                                className="text-red-600 hover:text-red-900"
-                              >
-                                Eliminar
-                              </button>
-                            </td>
-                          </>
-                        )}
-                      </tr>
-                    ))}
+                    {accounts.map((account) => {
+                      // 🔒 CANDADO CONTABLE: Verificamos en el milisegundo si la cuenta tiene transacciones asociadas
+                      const tieneTransacciones = transactions.some(t => t.cuentaId === account.id);
+
+                      return (
+                        <tr key={account.id}>
+                          {editingAccountId === account.id ? (
+                            <>
+                              {/* Campo Nombre: Siempre editable */}
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <input
+                                  type="text"
+                                  value={editedAccount?.nombre || ''}
+                                  onChange={(e) => setEditedAccount({ ...editedAccount!, nombre: e.target.value })}
+                                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                />
+                              </td>
+
+                              {/* Campo Moneda: BLOQUEADO si tiene transacciones */}
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <select
+                                  value={editedAccount?.moneda || 'ARS'}
+                                  onChange={(e) => setEditedAccount({ ...editedAccount!, moneda: e.target.value as 'ARS' | 'USD' })}
+                                  disabled={tieneTransacciones}
+                                  title={tieneTransacciones ? "No podés cambiar la moneda de una cuenta con movimientos activos" : ""}
+                                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                >
+                                  <option value="ARS">ARS</option>
+                                  <option value="USD">USD</option>
+                                </select>
+                              </td>
+
+                              {/* Campo Monto Inicial: BLOQUEADO si tiene transacciones */}
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <input
+                                  type="number"
+                                  value={editedAccount?.montoInicial || 0}
+                                  onChange={(e) => setEditedAccount({ ...editedAccount!, montoInicial: parseFloat(e.target.value) || 0 })}
+                                  disabled={tieneTransacciones}
+                                  title={tieneTransacciones ? "No podés modificar el monto inicial de una cuenta con movimientos activos" : ""}
+                                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm disabled:bg-gray-100 disabled:text-gray-400 disabled:cursor-not-allowed"
+                                />
+                              </td>
+
+                              {/* Saldo Actual (Informativo, calculado por el Store) */}
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
+                                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: editedAccount?.moneda || 'ARS', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(getAccountBalance(account.id))}
+                              </td>
+
+                              {/* Campo Grupo: Siempre editable */}
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <select
+                                  value={editedAccount?.grupo || ''}
+                                  onChange={(e) => setEditedAccount({ ...editedAccount!, grupo: e.target.value })}
+                                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                >
+                                  {accountGroups.map((group) => (
+                                    <option key={group.id} value={group.name}>{group.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+
+                              {/* Campo Categoría: Siempre editable */}
+                              <td className="px-6 py-4 whitespace-nowrap">
+                                <select
+                                  value={editedAccount?.categoria || ''}
+                                  onChange={(e) => setEditedAccount({ ...editedAccount!, categoria: e.target.value })}
+                                  className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                                >
+                                  {accountCategories.map((category) => (
+                                    <option key={category.id} value={category.name}>{category.name}</option>
+                                  ))}
+                                </select>
+                              </td>
+
+                              {/* Acciones de Guardar/Cancelar */}
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={handleSaveAccount}
+                                  className="text-green-600 hover:text-green-900 mr-2 font-semibold"
+                                >
+                                  Guardar
+                                </button>
+                                <button
+                                  onClick={handleCancelEditAccount}
+                                  className="text-gray-600 hover:text-gray-900"
+                                >
+                                  Cancelar
+                                </button>
+                              </td>
+                            </>
+                          ) : (
+                            <>
+                              {/* ... Este es el bloque del modo lectura (el que ya tenías), queda exactamente igual ... */}
+                              <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{account.nombre}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.moneda}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.montoInicial.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 font-bold">
+                                {new Intl.NumberFormat('es-AR', { style: 'currency', currency: account.moneda, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(getAccountBalance(account.id))}
+                              </td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.grupo}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.categoria}</td>
+                              <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                                <button
+                                  onClick={() => handleEditAccount(account)}
+                                  className="text-indigo-600 hover:text-indigo-900 mr-2"
+                                >
+                                  Editar
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteAccount(account.id)}
+                                  className="text-red-600 hover:text-red-900"
+                                >
+                                  Eliminar
+                                </button>
+                              </td>
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
