@@ -139,70 +139,96 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    // 4. MANTENIMIENTO DE ESTRUCTURAS SECUNDARIAS
+    // 4. MANTENIMIENTO DE ESTRUCTURAS SECUNDARIAS (Bypass de Repositorio Roto)
     addAccountGroup: async (name: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.addGroup(name);
-        await get().fetchInitialData();
+        const { error } = await supabase
+          .from('account_groups')
+          .insert([{ name }]);
+          
+        if (error) throw error;
+        await get().fetchInitialData(); // Recarga limpia en ráfaga paralela
       } catch (error) {
-        console.error(error);
+        console.error("🔥 Error directo al agregar grupo:", error);
       }
     },
 
     updateAccountGroup: async (id: string, newName: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.updateGroup(id, newName);
+        console.log(`📝 Actualizando grupo ID: ${id} a nuevo nombre: ${newName}`);
+        const { error } = await supabase
+          .from('account_groups')
+          .update({ name: newName })
+          .eq('id', id);
+          
+        if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error(error);
+        console.error("🔥 Error directo al actualizar grupo:", error);
       }
     },
 
-    deleteAccountGroup: async (name: string) => {
+    deleteAccountGroup: async (id: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.deleteGroup(name);
+        console.log(`🗑️ Eliminando grupo ID de forma directa: ${id}`);
+        const { error } = await supabase
+          .from('account_groups')
+          .delete()
+          .eq('id', id);
+          
+        if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error(error);
+        console.error("🔥 Error directo al eliminar grupo:", error);
       }
     },
 
     addAccountCategory: async (name: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.addCategory(name);
+        const { error } = await supabase
+          .from('account_categories')
+          .insert([{ name }]);
+          
+        if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error(error);
+        console.error("🔥 Error directo al agregar categoría:", error);
       }
     },
 
     updateAccountCategory: async (id: string, newName: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.updateCategory(id, newName);
+        console.log(`📝 Actualizando categoría ID: ${id} a nuevo nombre: ${newName}`);
+        const { error } = await supabase
+          .from('account_categories')
+          .update({ name: newName })
+          .eq('id', id);
+          
+        if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error(error);
+        console.error("🔥 Error directo al actualizar categoría:", error);
       }
     },
 
-    deleteAccountCategory: async (name: string) => {
+    deleteAccountCategory: async (id: string) => {
       try {
         const supabase = createClientSupabaseClient();
-        const supabaseCatalogRepository = new SupabaseCatalogRepository(supabase);
-        await supabaseCatalogRepository.deleteCategory(name);
+        console.log(`🗑️ Eliminando categoría ID de forma directa: ${id}`);
+        const { error } = await supabase
+          .from('account_categories')
+          .delete()
+          .eq('id', id);
+          
+        if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error(error);
+        console.error("🔥 Error directo al eliminar categoría:", error);
       }
     },
 
