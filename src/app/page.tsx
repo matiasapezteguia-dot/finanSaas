@@ -14,58 +14,75 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
   //const supabase = createClientSupabaseClient();
-  
-  const { 
-    transactions, 
-    accounts, 
-    deleteTransaction, 
-    getAccountBalance, 
-    accountCategories, 
-    accountGroups, 
-    fetchInitialData, 
-    getTotalARS, 
-    getTotalUSD 
+
+  const {
+    transactions,
+    accounts,
+    deleteTransaction,
+    getAccountBalance,
+    accountCategories,
+    accountGroups,
+    fetchInitialData,
+    getTotalARS,
+    getTotalUSD
   } = useFinanzasStore();
 
-  // Orquestador de inicialización inmune a congelamientos por F5
+  // Orquestador de inicialización inmune a congelamientos por F5 y navegación entre rutas
   useEffect(() => {
     console.log("🚀 COMUNICADO 1: El useEffect del Dashboard arrancó.");
-    
+
     const supabaseInstance = createClientSupabaseClient();
-    
-    console.log("⏳ Escuchando canal de autenticación reactivo de Supabase...");
-    
-    // onAuthStateChange se ejecuta INSTANTÁNEAMENTE en el cliente, evitando el congelamiento de cookies
+    let isSubscribed = true;
+
+    // Función auxiliar para cargar los datos y despertar la pantalla
+    const inicializarDatosDashboard = async () => {
+      try {
+        console.log("🚀 COMUNICADO 3: Disparando fetchInitialData() con sesión asegurada.");
+        await fetchInitialData();
+        console.log("🚀 COMUNICADO 4: ¡ÉXITO! Datos del Store sincronizados.");
+
+        if (isSubscribed) {
+          setMounted(true); // Despierta la pantalla liberando el "Cargando..."
+        }
+      } catch (error) {
+        console.error("🔥 Error al cargar datos del Store:", error);
+      }
+    };
+
+    // 🔒 DOBLE VERIFICACIÓN INMEDIATA (Soluciona la pantalla blanca o el "Cargando..." perpetuo)
+    const verificarSesionActual = async () => {
+      const { data: { session } } = await supabaseInstance.auth.getSession();
+      if (session) {
+        console.log("🔑 Sesión madura detectada en caché inmediata para:", session.user?.email);
+        await inicializarDatosDashboard();
+      }
+    };
+
+    verificarSesionActual();
+
+    console.log("⏳ Activando canal reactivo en segundo plano por si la sesión cambia...");
+
     const { data: { subscription } } = supabaseInstance.auth.onAuthStateChange(async (event, session) => {
       console.log("🔄 EVENTO DE AUTENTICACIÓN DETECTADO:", event, session ? "Hay sesión" : "No hay sesión");
-      
-      // Manejamos los dos estados posibles de forma asíncrona controlada
+
       if (event === 'SIGNED_IN' || session) {
-        console.log("🔑 Sesión confirmada para:", session?.user?.email);
-        
-        try {
-          // Si el store ya tiene datos o está cargando, evitamos duplicar la consulta
-          console.log("🚀 COMUNICADO 3: Disparando fetchInitialData() con sesión asegurada.");
-          await fetchInitialData();
-          console.log("🚀 COMUNICADO 4: ¡ÉXITO! Datos del Store sincronizados.");
-          
-          setMounted(true); // Despierta la pantalla
-        } catch (error) {
-          console.error("🔥 Error al cargar datos del Store:", error);
-        }
+        // Si no se despertó por la verificación inmediata, se despierta por el evento reactivo
+        await inicializarDatosDashboard();
       } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
-        // INITIAL_SESSION ocurre de inmediato si Supabase lee que no hay nadie logueado
         console.log("⚠️ No hay sesión activa. Redirigiendo a /login.");
-        router.push("/login");
+        if (isSubscribed) {
+          router.push("/login");
+        }
       }
     });
 
-    // Limpieza del listener cuando el componente se desmonte
+    // Limpieza al desmontar el componente
     return () => {
+      isSubscribed = false;
       subscription.unsubscribe();
     };
   }, [fetchInitialData, router]);
-  
+
   // Filtros de la tabla
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
   const [selectedAccountId, setSelectedAccountId] = useState<string | null>(null);
@@ -110,25 +127,29 @@ export default function Dashboard() {
           <p className="text-slate-500">Control de caja</p>
         </div>
         <div className="flex items-center space-x-4">
-          <button 
+          <button
             onClick={async () => {
               try {
                 const supabaseInstance = createClientSupabaseClient();
                 await supabaseInstance.auth.signOut();
-                localStorage.clear(); 
+
+                // Limpieza de estados residuales
+                localStorage.clear();
                 sessionStorage.clear();
+
+                // Redirección directa y única
+                console.log("🏃‍♂️ Redirigiendo limpiamente a /login...");
                 router.push("/login");
-                router.refresh();     
               } catch (err) {
                 console.error("Error al cerrar sesión:", err);
-                window.location.href = "/login"; 
+                window.location.href = "/login";
               }
             }}
             className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-600 transition"
           >
             Cerrar Sesión
           </button>
-          <button 
+          <button
             onClick={() => setIsTransactionModalOpen(true)}
             className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
           >
@@ -169,9 +190,9 @@ export default function Dashboard() {
         accountGroups={accountGroups}
       />
 
-      <AddTransactionModal 
-        isOpen={isTransactionModalOpen} 
-        onClose={() => setIsTransactionModalOpen(false)} 
+      <AddTransactionModal
+        isOpen={isTransactionModalOpen}
+        onClose={() => setIsTransactionModalOpen(false)}
       />
 
       {selectedAccountId && (

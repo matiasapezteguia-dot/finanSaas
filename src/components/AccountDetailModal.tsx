@@ -10,7 +10,8 @@ interface AccountDetailModalProps {
 }
 
 const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onClose }) => {
-  const { accounts, transactions, getAccountBalance, getBalancesByGroup } = useFinanzasStore();
+  // 💻 INYECTAMOS 'transactionTypes' para resolver el código relacional de los movimientos
+  const { accounts, transactions, transactionTypes, getAccountBalance, getBalancesByGroup } = useFinanzasStore();
   const [account, setAccount] = useState<Account | undefined>(undefined);
   const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
   const [startDate, setStartDate] = useState("");
@@ -39,30 +40,40 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
   ) => {
     if (!selectedAccount) return;
 
+    // 1. Filtramos transacciones vinculadas a la cuenta
     let tempTransactions = allTransactions.filter((t) =>
       t.cuentaId === selectedAccount.id || t.sourceAccountId === selectedAccount.id || t.targetAccountId === selectedAccount.id
     );
 
+    // 2. Filtros de Fecha
     if (start) {
       tempTransactions = tempTransactions.filter((t) => t.fecha.split('T')[0] >= start);
     }
     if (end) {
       tempTransactions = tempTransactions.filter((t) => t.fecha.split('T')[0] <= end);
     }
+
+    // 3. 🛡️ FILTRO DE TIPO CORREGIDO: Buscamos el código en el catálogo real del Store
     if (typeFilter !== "all") {
-      tempTransactions = tempTransactions.filter((t) => t.transaction_type_code === typeFilter);
+      tempTransactions = tempTransactions.filter((t) => {
+        const tipoObj = transactionTypes.find(tt => tt.id === t.transaction_type_id || tt.id === (t as any).typeId);
+        const codigoReal = tipoObj?.code?.toLowerCase().trim() || '';
+        return codigoReal === typeFilter;
+      });
     }
 
     setFilteredTransactions(tempTransactions);
 
-    // Calculate "Saldo Neto del Período"
-    let netBalance = 0; // Start with 0 for net balance of the period
+    // 4. Calcular saldo acumulado del período filtrado
+    let netBalance = 0;
     tempTransactions.forEach((t) => {
-      if (t.targetAccountId === selectedAccount.id) {
-        // Transaction is incoming to the selected account
+      // Si el movimiento opera sobre esta misma cuenta
+      if (t.targetAccountId === selectedAccount.id && t.sourceAccountId === selectedAccount.id) {
+        // Ajustes o cierres de cuenta que impactan sobre sí misma
+        netBalance += t.monto;
+      } else if (t.targetAccountId === selectedAccount.id) {
         netBalance += t.monto;
       } else if (t.sourceAccountId === selectedAccount.id) {
-        // Transaction is outgoing from the selected account
         netBalance -= t.monto;
       }
     });
@@ -85,26 +96,37 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
       <div className="bg-white w-full max-w-3xl rounded-2xl shadow-2xl border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-150">
         <div className="p-6 border-b border-slate-100 flex justify-between items-center">
           <h3 className="text-lg font-bold text-slate-900">Detalle de Cuenta: {account.nombre}</h3>
-          <button onClick={onClose} className="text-slate-500 hover:text-slate-700">
+          <button onClick={onClose} className="text-slate-500 hover:text-slate-700 font-bold text-lg">
             ✕
           </button>
         </div>
 
         <div className="p-6 space-y-4">
-          <div className="grid grid-cols-2 gap-4 text-sm">
+<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase">Moneda</p>
-              <p className="text-slate-900">{account.moneda}</p>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Moneda</p>
+              <p className="text-slate-900 font-medium">{account.moneda}</p>
             </div>
+            
+            {/* 🆕 SALDO INICIAL: Añadido exactamente en el espacio marcado de la imagen */}
             <div>
-              <p className="text-xs font-bold text-slate-500 uppercase">Saldo Actual</p>
-              <p className="text-slate-900 font-bold">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Saldo Inicial</p>
+              <p className="text-slate-600 font-medium text-base">
+                {account.moneda === "ARS" ? "$" : "US$"}{" "}
+                {account.montoInicial.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+
+            <div>
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Saldo Actual</p>
+              <p className="text-slate-900 font-bold text-base">
                 {account.moneda === "ARS" ? "$" : "US$"}{" "}
                 {getAccountBalance(account.id).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
-            <div className="col-span-2">
-              <p className="text-xs font-bold text-slate-500 uppercase">Total Grupo {account.grupo}</p>
+
+            <div className="col-span-1 sm:col-span-3 pt-2 border-t border-slate-100">
+              <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Total Grupo ({account.grupo})</p>
               <p className="text-slate-900 font-bold">
                 {account.moneda === "ARS" ? "$" : "US$"}{" "}
                 {totalGroupBalance[account.moneda]?.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -113,9 +135,9 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
           </div>
 
           {/* Filtros */}
-          <div className="bg-slate-50 p-4 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="bg-slate-50 p-4 rounded-xl grid grid-cols-1 md:grid-cols-3 gap-4 border border-slate-100">
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Desde</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-wider">Desde</label>
               <input
                 type="date"
                 value={startDate}
@@ -124,7 +146,7 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Hasta</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-wider">Hasta</label>
               <input
                 type="date"
                 value={endDate}
@@ -133,7 +155,7 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
               />
             </div>
             <div>
-              <label className="block text-xs font-bold text-slate-500 uppercase mb-1">Tipo de Movimiento</label>
+              <label className="block text-xs font-bold text-slate-500 uppercase mb-1 tracking-wider">Tipo de Movimiento</label>
               <select
                 value={transactionTypeFilter}
                 onChange={(e) => setTransactionTypeFilter(e.target.value as "all" | "income" | "expense" | "transfer")}
@@ -147,18 +169,18 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
             </div>
           </div>
 
-          {/* Saldo del Filtro */}
-          <div className="bg-blue-50 p-4 rounded-xl text-blue-800 font-bold text-center">
-            Saldo del Filtro: {account.moneda === "ARS" ? "$" : "US$"}{" "}
+          {/* Saldo Neto del Filtro */}
+          <div className="bg-blue-50 p-4 rounded-xl text-blue-800 font-bold text-center border border-blue-100 shadow-sm">
+            Saldo Neto del Período: {account.moneda === "ARS" ? "$" : "US$"}{" "}
             {filteredBalance.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
 
           {/* Historial de Transacciones */}
-          <h4 className="text-md font-bold text-slate-900 mt-6">Historial de Transacciones</h4>
-          <div className="overflow-x-auto max-h-60">
+          <h4 className="text-md font-bold text-slate-900 mt-6 tracking-wide">Historial de Transacciones</h4>
+          <div className="overflow-x-auto max-h-60 border border-slate-100 rounded-xl">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-slate-50 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-200 sticky top-0">
+                <tr className="bg-slate-50 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-200 sticky top-0 z-10">
                   <th className="p-3">Fecha</th>
                   <th className="p-3">Descripción</th>
                   <th className="p-3 text-center">Tipo</th>
@@ -168,27 +190,37 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
               <tbody className="divide-y divide-slate-100 text-sm text-slate-700">
                 {filteredTransactions.length === 0 ? (
                   <tr>
-                    <td colSpan={4} className="p-4 text-center text-slate-400">No hay transacciones para los filtros seleccionados.</td>
+                    <td colSpan={4} className="p-8 text-center text-slate-400 bg-white">
+                      No hay transacciones registradas para los filtros seleccionados.
+                    </td>
                   </tr>
                 ) : (
                   filteredTransactions.map((t) => {
                     const isSource = t.sourceAccountId === account.id;
-                    const isTarget = t.targetAccountId === account.id;
                     const displayAmount = isSource ? -t.monto : t.monto;
                     const amountClass = isSource ? "text-red-600" : "text-green-600";
 
+                    // 🔄 RESOLUTOR EN CALIENTE: Obtenemos el tipo dinámicamente para las etiquetas de la lista
+                    const tipoEncontrado = transactionTypes.find(tt => tt.id === t.transaction_type_id || tt.id === (t as any).typeId);
+                    const codigoTipo = tipoEncontrado?.code?.toLowerCase().trim() || 'transfer';
+                    const nombreTipo = tipoEncontrado?.name || 'Transferencia';
+
+                    let badgeStyle = "bg-blue-100 text-blue-700";
+                    if (codigoTipo === 'income' || codigoTipo === 'ingreso') badgeStyle = "bg-green-100 text-green-700";
+                    if (codigoTipo === 'expense' || codigoTipo === 'egreso') badgeStyle = "bg-red-100 text-red-700";
+
                     return (
-                      <tr key={t.id} className="hover:bg-slate-50 transition">
-                        <td className="p-3">{t.fecha}</td>
+                      <tr key={t.id} className="hover:bg-slate-50/80 transition bg-white">
+                        <td className="p-3 whitespace-nowrap">{t.fecha}</td>
                         <td className="p-3">{t.descripcion}</td>
-                        <td className="p-3 text-center">
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.transaction_type_code === 'income' ? 'bg-green-100 text-green-700' : t.transaction_type_code === 'expense' ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'}`}>
-                              {t.transaction_type_code === 'income' ? 'Ingreso' : t.transaction_type_code === 'expense' ? 'Egreso' : 'Transferencia'}
+                        <td className="p-3 text-center whitespace-nowrap">
+                          <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${badgeStyle}`}>
+                            {nombreTipo}
                           </span>
                         </td>
-                        <td className={`p-3 text-right font-bold ${amountClass}`}>
-                          {displayAmount > 0 ? '+ ' : '- '}{account.moneda === "ARS" ? "$" : "US$"}{" "}
-                          {Math.abs(displayAmount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                        <td className={`p-3 text-right font-bold whitespace-nowrap ${amountClass}`}>
+                          {displayAmount >= 0 ? '+ ' : '- '}{account.moneda === "ARS" ? "$" : "US$"}{" "}
+                          {Math.abs(displayAmount).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     );
