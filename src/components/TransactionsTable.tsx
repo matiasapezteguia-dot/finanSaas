@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Account, Transaction } from "../types/finanzas";
+import { Account, Transaction, AccountGroup } from "../types/finanzas";
 import { ArrowUpDown } from 'lucide-react';
 import { excelExportService } from '../utils/excelExport';
 
@@ -24,7 +24,7 @@ interface TransactionsTableProps {
   setCurrentPage: (page: number) => void;
   transactionsPerPage: number;
   accountCategories: any[]; // Cambiado a any[] para tolerar objetos de Supabase
-  accountGroups: string[];
+  accountGroups: AccountGroup[];
 }
 
 const TransactionsTable: React.FC<TransactionsTableProps> = ({
