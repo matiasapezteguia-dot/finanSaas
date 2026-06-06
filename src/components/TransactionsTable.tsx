@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Account, Transaction } from "../types/finanzas";
 import { ArrowUpDown } from 'lucide-react';
+import { excelExportService } from '../utils/excelExport';
 
 interface TransactionsTableProps {
   transactions: Transaction[];
@@ -79,17 +80,17 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   const normalizedTransactions = transactions.map((t: any) => {
     // 1. Extraer Fecha Real
     const rawDate = t.transaction_date || t.date || t.fecha;
-    
+
     // 2. Extraer Monto Real
     const rawAmount = t.amount ?? t.monto ?? 0;
-    
+
     // 3. Extraer Moneda Real
     const rawCurrency = t.currency || t.moneda || 'ARS';
 
     // 4. Extraer Tipo de Transacción y normalizarlo a código ('income', 'expense', etc.)
     let codeType = 'adjustment';
     let labelType = 'Ajuste';
-    
+
     // Lista dura temporal para mappear UUIDs reales detectados en Navicat
     if (t.transaction_type_id === '0dbd4608-5fdb-4b72-8ec6-3472933213b9' || t.type === 'income' || t.tipo === 'ingreso') {
       codeType = 'income';
@@ -180,6 +181,19 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
       <div className="p-6 border-b border-slate-200 flex justify-between items-center">
         <h2 className="text-xl font-bold text-slate-900">Últimas Transacciones</h2>
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+          <button
+            onClick={() => excelExportService.exportTransacciones(transactions, accounts)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center gap-2 transition-all shadow-sm hover:shadow active:scale-95 text-sm"
+          >
+            {/* Icono de descarga de documento Excel */}
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Exportar
+          </button>
+        </div>
       </div>
 
       <div className="overflow-x-auto">
@@ -310,41 +324,39 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                       {t.date ? new Date(t.date).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : 'Invalid Date'}
                     </td>
                     <td className="p-4 font-medium text-slate-900">{t.description}</td>
-                    
+
                     {/* Cuenta mapeada por ID relacional */}
                     <td className="p-4 text-slate-600 font-medium">
                       {t.accountName || 'Entidad Externa / Ajuste'}
                     </td>
-                    
+
                     {/* Badge del tipo de transacción */}
                     <td className="p-4 text-center">
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                        t.typeCode === 'income' ? 'bg-green-100 text-green-700' : 
-                        t.typeCode === 'expense' ? 'bg-red-100 text-red-700' : 
-                        t.typeCode === 'transfer' ? 'bg-blue-100 text-blue-700' : 
-                        'bg-purple-100 text-purple-700'
-                      }`}>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.typeCode === 'income' ? 'bg-green-100 text-green-700' :
+                        t.typeCode === 'expense' ? 'bg-red-100 text-red-700' :
+                          t.typeCode === 'transfer' ? 'bg-blue-100 text-blue-700' :
+                            'bg-purple-100 text-purple-700'
+                        }`}>
                         {t.typeLabel}
                       </span>
                     </td>
-                    
+
                     {/* Badge de Moneda */}
                     <td className="p-4 text-center">
                       <span className={`px-2 py-1 rounded-md text-xs font-bold ${t.currency === 'ARS' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
                         {t.currency}
                       </span>
                     </td>
-                    
+
                     {/* Impacto de Monto numérico formateado */}
-                    <td className={`p-4 text-right font-bold ${
-                      t.typeCode === 'income' ? 'text-green-600' : 
-                      t.typeCode === 'expense' ? 'text-red-600' : 
-                      'text-blue-600'
-                    }`}>
+                    <td className={`p-4 text-right font-bold ${t.typeCode === 'income' ? 'text-green-600' :
+                      t.typeCode === 'expense' ? 'text-red-600' :
+                        'text-blue-600'
+                      }`}>
                       {t.typeCode === 'income' ? '+ ' : t.typeCode === 'expense' ? '- ' : ''}
                       $ {t.amount.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-                    
+
                     <td className="p-4 text-center">
                       <button
                         onClick={() => deleteTransaction(t.id)}
