@@ -1,8 +1,10 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { useFinanzasStore } from '../../lib/store';
-import { Account } from '../../types/finanzas';
+import { useRouter } from 'next/navigation';
+import { useFinanzasStore } from '../../../lib/store';
+import { Account } from '../../../types/finanzas';
+import { supabase } from '../../../lib/supabaseClient';
 
 interface TabProps {
   label: string;
@@ -28,11 +30,10 @@ const Tabs: React.FC<TabsProps> = ({ children }) => {
             <button
               key={child.props.label}
               onClick={() => setActiveTab(child.props.label)}
-              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${
-                activeTab === child.props.label
+              className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${activeTab === child.props.label
                   ? 'border-indigo-500 text-indigo-600'
                   : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
-              }`}
+                }`}
             >
               {child.props.label}
             </button>
@@ -151,9 +152,8 @@ const ListManager: React.FC<{
               )}
               <button
                 onClick={() => onDelete(item.id)}
-                className={`text-red-600 hover:text-red-900 ${
-                  !isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
-                }`}
+                className={`text-red-600 hover:text-red-900 ${!isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
+                  }`}
                 disabled={!isDeletable(item.id)}
                 title={!isDeletable(item.id) ? 'No se puede eliminar porque tiene cuentas asociadas' : ''}
               >
@@ -168,11 +168,9 @@ const ListManager: React.FC<{
 };
 
 export default function ConfiguracionPage() {
+  const router = useRouter();
   const [mounted, setMounted] = useState(false);
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  const [authed, setAuthed] = useState(false);
 
   const {
     accountGroups,
@@ -192,15 +190,35 @@ export default function ConfiguracionPage() {
     transactions,
   } = useFinanzasStore();
 
+  // 1. Nos aseguramos de estar en el cliente de forma real
   useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // 2. Candado basado en el Estado Real del SaaS
+  useEffect(() => {
+    const chequearAccesoReal = async () => {
+      // Intentamos sincronizar datos con el Store primero
+      await fetchInitialData();
+
+      // Conectamos directamente con el estado vivo de Zustand
+      const estadoActual = useFinanzasStore.getState();
+
+      // Si el Store no pudo traer ni un solo grupo de cuentas, es porque no hay sesión o falló la API
+      if (estadoActual.accountGroups.length === 0) {
+        window.location.href = '/login';
+      } else {
+        setAuthed(true);
+      }
+    };
+
     if (mounted) {
-      console.log("🚀 Disparando fetchInitialData de forma segura desde el cliente montado.");
-      fetchInitialData();
+      chequearAccesoReal();
     }
   }, [mounted, fetchInitialData]);
 
-  // 🏆 BUENA PRÁCTICA: Inicializamos el formulario usando las propiedades de ID relacionales directas
-const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'categoria' | 'current_amount' | 'user_id' | 'created_at'> & { account_group_id: string; account_category_id: string }>({
+  // 🏆 Declaración ordenada de Hooks (El useState de newAccount que va abajo queda igual...)
+  const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'categoria' | 'current_amount' | 'user_id' | 'created_at'> & { account_group_id: string; account_category_id: string }>({
     nombre: '',
     montoInicial: 0,
     moneda: 'ARS',
@@ -208,22 +226,20 @@ const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'cat
     account_category_id: '',
   });
 
-  // Escucha cuando Supabase llena los catálogos y les asigna los IDs iniciales por defecto seguros
   useEffect(() => {
-    if (mounted && (accountGroups.length > 0 || accountCategories.length > 0)) {
+    if (mounted && authed && (accountGroups.length > 0 || accountCategories.length > 0)) {
       setNewAccount((prev) => ({
         ...prev,
         account_group_id: prev.account_group_id || (accountGroups[0]?.id || ''),
         account_category_id: prev.account_category_id || (accountCategories[0]?.id || ''),
       }));
     }
-  }, [mounted, accountGroups, accountCategories]);
+  }, [mounted, authed, accountGroups, accountCategories]);
 
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editedAccount, setEditedAccount] = useState<Account | null>(null);
 
   const handleAddAccount = () => {
-    // Validamos usando la existencia de los IDs obligatorios
     if (newAccount.nombre && newAccount.montoInicial >= 0 && newAccount.account_group_id && newAccount.account_category_id) {
       addAccount(newAccount as any);
       setNewAccount({
@@ -254,8 +270,7 @@ const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'cat
     setEditedAccount(null);
   };
 
-const handleDeleteAccount = (accountId: string) => {
-    // 🔒 CANDADO CONTABLE: Bloqueo estricto si registra movimientos en el historial
+  const handleDeleteAccount = (accountId: string) => {
     const tieneMovimientos = transactions.some((t) => t.cuentaId === accountId);
 
     if (tieneMovimientos) {
@@ -265,7 +280,6 @@ const handleDeleteAccount = (accountId: string) => {
       return;
     }
 
-    // Si no tiene movimientos, pasa a la validación de saldo actual por seguridad residual
     const accountToDelete = accounts.find((acc) => acc.id === accountId);
     if (accountToDelete) {
       const currentBalance = getAccountBalance(accountId);
@@ -283,7 +297,8 @@ const handleDeleteAccount = (accountId: string) => {
     }
   };
 
-  if (!mounted) {
+  // 🔒 Control de renderizado al final del archivo
+  if (!mounted || !authed) {
     return null;
   }
 
@@ -405,7 +420,6 @@ const handleDeleteAccount = (accountId: string) => {
                   id="accountGroup"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={newAccount.account_group_id}
-                  // 🏆 ENVIAMOS ID DIRECTO: Se conecta nativamente al Store relacional
                   onChange={(e) => setNewAccount({ ...newAccount, account_group_id: e.target.value })}
                 >
                   <option value="">Seleccionar Grupo...</option>
@@ -420,7 +434,6 @@ const handleDeleteAccount = (accountId: string) => {
                   id="accountCategory"
                   className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                   value={newAccount.account_category_id}
-                  // 🏆 ENVIAMOS ID DIRECTO: Se conecta nativamente al Store relacional
                   onChange={(e) => setNewAccount({ ...newAccount, account_category_id: e.target.value })}
                 >
                   <option value="">Seleccionar Categoría...</option>
@@ -505,7 +518,6 @@ const handleDeleteAccount = (accountId: string) => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <select
                                   value={editedAccount?.account_group_id || ''}
-                                  // 🏆 ENVIAMOS ID DIRECTO EN LA EDICIÓN
                                   onChange={(e) => setEditedAccount({ ...editedAccount!, account_group_id: e.target.value })}
                                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                                 >
@@ -518,7 +530,6 @@ const handleDeleteAccount = (accountId: string) => {
                               <td className="px-6 py-4 whitespace-nowrap">
                                 <select
                                   value={editedAccount?.account_category_id || ''}
-                                  // 🏆 ENVIAMOS ID DIRECTO EN LA EDICIÓN
                                   onChange={(e) => setEditedAccount({ ...editedAccount!, account_category_id: e.target.value })}
                                   className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
                                 >
@@ -542,7 +553,6 @@ const handleDeleteAccount = (accountId: string) => {
                             </>
                           ) : (
                             <>
-                              {/* MODO LECTURA: Sigue renderizando `.grupo` y `.categoria` (el texto virtual del Store híbrido), por ende la UI no se rompe */}
                               <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{account.nombre}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.moneda}</td>
                               <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{account.montoInicial.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
@@ -560,9 +570,8 @@ const handleDeleteAccount = (accountId: string) => {
                                 </button>
                                 <button
                                   onClick={() => handleDeleteAccount(account.id)}
-                                  className={`text-red-600 hover:text-red-900 ${
-                                    tieneTransacciones ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
-                                  }`}
+                                  className={`text-red-600 hover:text-red-900 ${tieneTransacciones ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
+                                    }`}
                                   disabled={tieneTransacciones}
                                   title={tieneTransacciones ? 'No se puede eliminar porque tiene transacciones asociadas' : ''}
                                 >
