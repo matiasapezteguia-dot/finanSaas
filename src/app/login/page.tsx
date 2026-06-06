@@ -13,6 +13,19 @@ function LoginContent() {
   const searchParams = useSearchParams()
 
   useEffect(() => {
+    const verificarSesionActiva = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (session) {
+        // 🚀 Como tu dashboard es la página principal de la app, te mandamos a la raíz '/'
+        window.location.href = '/';
+      }
+    };
+
+    verificarSesionActiva();
+  }, []);
+
+  useEffect(() => {
     const errorParam = searchParams.get('error')
     const errorCodeParam = searchParams.get('error_code')
 
