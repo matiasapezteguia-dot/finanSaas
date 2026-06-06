@@ -34,6 +34,8 @@ export interface Account {
   account_category_id: string; // 🔑 ID real (UUID) relacional de la base de datos
   moneda: 'ARS' | 'USD';
   montoInicial: number;
+  current_amount: number;
+  user_id: string;
   created_at?: string;
   
   // 🔄 CAPA DE COMPATIBILIDAD VIRTUAL:

@@ -200,7 +200,7 @@ export default function ConfiguracionPage() {
   }, [mounted, fetchInitialData]);
 
   // 🏆 BUENA PRÁCTICA: Inicializamos el formulario usando las propiedades de ID relacionales directas
-  const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'categoria'> & { account_group_id: string; account_category_id: string }>({
+const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'categoria' | 'current_amount' | 'user_id' | 'created_at'> & { account_group_id: string; account_category_id: string }>({
     nombre: '',
     montoInicial: 0,
     moneda: 'ARS',

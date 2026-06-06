@@ -40,7 +40,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
       globalSupabase.from('account_categories').select('id, name'),
       globalSupabase.from('transaction_types').select('id, name, code'),
       supabaseTransactionRepository.fetchAll(),
-      globalSupabase.from('accounts').select('id, name, currency, initial_amount, account_group_id, account_category_id')
+      globalSupabase.from('accounts').select('id, created_at, user_id, name, currency, initial_amount, current_amount, account_group_id, account_category_id')
     ]);
 
     // Validamos errores de las consultas directas
@@ -66,6 +66,9 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
         nombre: acc.name || 'Sin Nombre',
         moneda: (acc.currency as 'ARS' | 'USD') || 'ARS',
         montoInicial: Number(acc.initial_amount) || 0,
+        current_amount: Number(acc.current_amount) || 0, // Agregado
+        user_id: acc.user_id, // Agregado
+        created_at: acc.created_at, // Agregado
         
         // 🔑 IDs reales para persistencia limpia y encapsulada
         account_group_id: acc.account_group_id || '',

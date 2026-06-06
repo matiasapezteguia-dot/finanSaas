@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Account, Transaction } from '../../types/finanzas';
+import { Account, Transaction } from '../types/finanzas';
 
 /**
  * Servicio utilitario centralizado para la exportación de datos financieros a Excel.

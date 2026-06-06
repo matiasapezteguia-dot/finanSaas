@@ -1,11 +1,10 @@
 'use client'
 
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { createClientSupabaseClient } from '@/utils/supabase/client'
-import { useRouter } from 'next/navigation'
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'next/navigation'
 
-export default function LoginPage() {
+function LoginContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -18,17 +17,12 @@ export default function LoginPage() {
     const errorCodeParam = searchParams.get('error_code')
 
     if (errorParam === 'access_denied' && errorCodeParam === 'signup_disabled') {
-      // Clear any local session data (localStorage/cookies de supabase)
       supabase.auth.signOut()
-      // Set the error message
       setError('Tu correo de Google no está autorizado en FinanSaas.')
-      // Redirect to /login (or stay here) - the current page is /login, so no explicit redirect needed
-      // However, we should clear the URL parameters to prevent re-triggering the effect on refresh
       router.replace('/login', undefined)
     }
   }, [searchParams, supabase, setError, router])
 
-  // � Login tradicional con contraseña
   const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError(null)
@@ -45,17 +39,14 @@ export default function LoginPage() {
     }
   }
 
-  // 🚀 El nuevo motor con Google OAuth dinámico
   const handleGoogleLogin = async () => {
     setError(null)
 
-    // 🕵️ Esto detecta si estás en http://localhost:3000 o https://finansaas-app.vercel.app
     const currentOrigin = window.location.origin
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
-        // Le sumamos una barra al final para que Supabase la procese bien
         redirectTo: `${currentOrigin}/`,
       },
     })
@@ -70,13 +61,11 @@ export default function LoginPage() {
       <div className="px-8 py-6 mt-4 text-left bg-white shadow-lg rounded-2xl w-full max-w-md border border-slate-100">
         <h3 className="text-2xl font-bold text-center text-slate-900 mb-6">Iniciar Sesión</h3>
 
-        {/* Botón de Google premium con interacción fluida */}
         <button
           onClick={handleGoogleLogin}
           type="button"
           className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-medium transition-all shadow-sm active:scale-[0.99]"
         >
-          {/* SVG Oficial Multi-color de Google */}
           <svg className="w-5 h-5" viewBox="0 0 24 24">
             <path
               fill="#4285F4"
@@ -98,7 +87,6 @@ export default function LoginPage() {
           Continuar con Google
         </button>
 
-        {/* Separador visual prolijo */}
         <div className="relative flex py-5 items-center">
           <div className="flex-grow border-t border-slate-200"></div>
           <span className="flex-shrink mx-4 text-slate-400 text-xs uppercase tracking-wider">o ingresar con mail</span>
@@ -136,12 +124,20 @@ export default function LoginPage() {
 
           <button
             type="submit"
-            className="w-full px-6 py-2.5 mt-6 text-white bg-slate-900 rounded-xl font-semibold hover:bg-slate-800 transition-all shadow-sm active:scale-[0.99] text-sm"
+            className="w-full px-6 py-2.5 mt-6 text-white bg-slate-900 rounded-xl font-semibold hover:bg-slate-800 transition-all shadow-sm active:scale-[0.99]"
           >
             Iniciar Sesión
           </button>
         </form>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Cargando...</div>}>
+      <LoginContent />
+    </Suspense>
   )
 }

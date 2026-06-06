@@ -15,13 +15,30 @@ export class SupabaseAccountRepository {
   async fetchAllRaw(): Promise<AccountRow[]> {
     const { data, error } = await this.supabase
       .from('accounts')
-      .select('id, name, currency, initial_amount, account_group_id, account_category_id, created_at');
+      .select('id, name, currency, initial_amount, current_amount, user_id, account_group_id, account_category_id, created_at');
 
     if (error) {
       console.error('🔥 Error en Repositorio al buscar cuentas:', error);
       throw error;
     }
     return data || [];
+  }
+
+  async fetchAll(): Promise<Account[]> {
+    const rawAccounts = await this.fetchAllRaw();
+    return rawAccounts.map(row => ({
+      id: row.id,
+      nombre: row.name,
+      account_group_id: row.account_group_id || '', // Asegurar que no sea null
+      account_category_id: row.account_category_id || '', // Asegurar que no sea null
+      moneda: row.currency as MonedaType,
+      montoInicial: row.initial_amount,
+      current_amount: row.current_amount,
+      user_id: row.user_id || '', // Asegurar que no sea null
+      created_at: row.created_at,
+      grupo: '', // Se rellena en el Store
+      categoria: '', // Se rellena en el Store
+    }));
   }
 
   // Guarda en la BD usando puramente los IDs relacionales que le envía el Store
