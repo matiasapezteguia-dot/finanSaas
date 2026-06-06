@@ -147,12 +147,11 @@ export default function Dashboard() {
                 localStorage.clear();
                 sessionStorage.clear();
 
-                // Redirección directa y única
                 console.log("🏃‍♂️ Redirigiendo limpiamente a /login...");
-                router.push("/login");
+                window.location.href = "/login";
               } catch (err) {
                 console.error("Error al cerrar sesión:", err);
-                window.location.href = "/login";
+                window.location.href = "/login"; // Asegurar redirección incluso si signOut falla
               }
             }}
             className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-600 transition"

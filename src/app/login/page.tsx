@@ -64,6 +64,7 @@ function LoginContent() {
         <button
           onClick={handleGoogleLogin}
           type="button"
+          suppressHydrationWarning={true}
           className="w-full flex items-center justify-center gap-3 px-4 py-2.5 border border-slate-200 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-medium transition-all shadow-sm active:scale-[0.99]"
         >
           <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -99,6 +100,7 @@ function LoginContent() {
             <input
               type="email"
               placeholder="nombre@correo.com"
+              suppressHydrationWarning={true}
               className="w-full px-4 py-2 mt-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 bg-slate-50 text-slate-900 transition-all text-sm"
               id="email"
               value={email}
@@ -112,6 +114,7 @@ function LoginContent() {
             <input
               type="password"
               placeholder="••••••••"
+              suppressHydrationWarning={true}
               className="w-full px-4 py-2 mt-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 bg-slate-50 text-slate-900 transition-all text-sm"
               id="password"
               value={password}
@@ -124,6 +127,7 @@ function LoginContent() {
 
           <button
             type="submit"
+            suppressHydrationWarning={true}
             className="w-full px-6 py-2.5 mt-6 text-white bg-slate-900 rounded-xl font-semibold hover:bg-slate-800 transition-all shadow-sm active:scale-[0.99]"
           >
             Iniciar Sesión

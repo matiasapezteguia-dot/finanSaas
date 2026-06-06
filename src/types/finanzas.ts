@@ -35,7 +35,7 @@ export interface Account {
   moneda: 'ARS' | 'USD';
   montoInicial: number;
   current_amount: number;
-  user_id: string;
+  user_id: string | null;
   created_at?: string;
   
   // 🔄 CAPA DE COMPATIBILIDAD VIRTUAL:
