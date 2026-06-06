@@ -37,12 +37,22 @@ export default function Dashboard() {
     // Función auxiliar para cargar los datos y despertar la pantalla
     const inicializarDatosDashboard = async () => {
       try {
+        const supabaseInstance = createClientSupabaseClient();
+        const { data: { session } } = await supabaseInstance.auth.getSession();
+
+        // 🔒 CONTROL ABSOLUTO: Si no hay sesión madura en el cliente, abortamos el inicio y mandamos a login
+        if (!session) {
+          console.log("🛑 Intento de acceso no autorizado. Bloqueando Dashboard y redirigiendo...");
+          router.push("/login");
+          return;
+        }
+
         console.log("🚀 COMUNICADO 3: Disparando fetchInitialData() con sesión asegurada.");
         await fetchInitialData();
         console.log("🚀 COMUNICADO 4: ¡ÉXITO! Datos del Store sincronizados.");
 
         if (isSubscribed) {
-          setMounted(true); // Despierta la pantalla liberando el "Cargando..."
+          setMounted(true); // Solo se despierta la pantalla si el usuario es REAL y tiene datos
         }
       } catch (error) {
         console.error("🔥 Error al cargar datos del Store:", error);
