@@ -36,19 +36,30 @@ function LoginContent() {
     }
   }, [searchParams, supabase, setError, router])
 
-  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError(null)
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { error: supabaseError } = await supabase.auth.signInWithPassword({
       email,
       password,
     })
 
-    if (error) {
-      setError(error.message)
+    if (supabaseError) {
+      console.log("🔍 Error crudo de Supabase:", supabaseError)
+      
+      const msg = supabaseError.message.toLowerCase()
+      
+      // 💡 Traducimos los errores típicos de la White List y credenciales
+      if (msg.includes('email not allowed') || msg.includes('not authorized') || supabaseError.status === 415) {
+        setError('Este correo electrónico no está autorizado en la lista blanca de FinanSaas.')
+      } else if (msg.includes('invalid login credentials') || msg.includes('user not found')) {
+        setError('El correo o la contraseña son incorrectos.')
+      } else {
+        setError('Error al iniciar sesión: ' + supabaseError.message)
+      }
     } else {
-      router.push('/')
+      window.location.href = '/'
     }
   }
 
