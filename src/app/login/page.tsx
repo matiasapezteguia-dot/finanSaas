@@ -17,13 +17,13 @@ function LoginContent() {
       const { data: { session } } = await supabase.auth.getSession();
 
       if (session) {
-        // 🚀 Como tu dashboard es la página principal de la app, te mandamos a la raíz '/'
-        window.location.href = '/';
+        // 🚀 Cambiamos el recargo de página duro por la navegación nativa y fluida de Next.js
+        router.push('/');
       }
     };
 
     verificarSesionActiva();
-  }, []);
+  }, [router, supabase]); // Añadimos las dependencias limpias de React
 
   useEffect(() => {
     const errorParam = searchParams.get('error')
@@ -36,7 +36,7 @@ function LoginContent() {
     }
   }, [searchParams, supabase, setError, router])
 
-const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     setError(null)
 
@@ -47,9 +47,9 @@ const handleLogin = async (e: React.FormEvent<HTMLFormElement>) => {
 
     if (supabaseError) {
       console.log("🔍 Error crudo de Supabase:", supabaseError)
-      
+
       const msg = supabaseError.message.toLowerCase()
-      
+
       // 💡 Traducimos los errores típicos de la White List y credenciales
       if (msg.includes('email not allowed') || msg.includes('not authorized') || supabaseError.status === 415) {
         setError('Este correo electrónico no está autorizado en la lista blanca de FinanSaas.')

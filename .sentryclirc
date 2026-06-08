@@ -1,0 +1,6 @@
+[auth]
+token=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
+
+[defaults]
+org=matias-apezteguia
+project=javascript-nextjs

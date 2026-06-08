@@ -151,7 +151,12 @@ const ListManager: React.FC<{
                 </button>
               )}
               <button
-                onClick={() => onDelete(item.id)}
+                onClick={() => {
+                    const confirmar = window.confirm("⚠️ ¿Estás seguro de eliminar este elemento? Esta acción afectará a todos los usuarios de la organización y es irreversible.");
+                    if (confirmar) {
+                      onDelete(item.id);
+                    }
+                  }}
                 className={`text-red-600 hover:text-red-900 ${!isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
                   }`}
                 disabled={!isDeletable(item.id)}
@@ -292,6 +297,10 @@ export default function ConfiguracionPage() {
         if (!confirmDelete) {
           return;
         }
+      }
+      const confirmar = window.confirm("¿Deseas eliminar esta cuenta? Aunque no tiene movimientos ni saldo, desaparecerá del panel de todos los usuarios.");
+      if (!confirmar) {
+        return;
       }
       deleteAccount(accountId);
     }
