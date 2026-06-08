@@ -5,18 +5,16 @@ const nextConfig: NextConfig = {
   /* config options here */
 };
 
-const sentryOptions = {
-  silent: true, // 👈 Esto hace que si falla el token o no hay, ignore el error y termine el build igual!
-  hideSourceMaps: true,
-  disableLogger: true,
-};
-
 export default withSentryConfig(nextConfig, {
-  silent: true, // Evita que falte el token en local y te trabe el compilador
+  // Le pasamos las credenciales reales de tu .env.local al compilador
+  org: process.env.SENTRY_ORG,
+  project: process.env.SENTRY_PROJECT,
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+
+  silent: false, // ¡Ponelo en false para ver en la consola cómo se conecta con éxito!
   widenClientFileUpload: true,
   sourcemaps: {
-    disable: true, // Esto desactiva la queja de TypeScript que vimos antes
+    disable: false, // ¡Ponelo en false! Ahora que hay token real, que suba los mapas sin miedo
   },
   disableLogger: true,
 });
-
