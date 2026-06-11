@@ -1,9 +1,6 @@
+// Re-exportamos el cliente único centralizado para que nada viejo se rompa
+import { supabase } from '../../lib/supabaseClient';
+export { supabase };
 
-import { createBrowserClient } from '@supabase/ssr'
-
-export function createClientSupabaseClient() {
-  return createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
+// Si tenías una función que se llamaba createClientSupabaseClient, la dejamos mapeada al único:
+export const createClientSupabaseClient = () => supabase;
