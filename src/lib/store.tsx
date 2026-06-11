@@ -106,15 +106,19 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     addTransaction: async (transaction: Omit<Transaction, 'id' | 'created_at'>) => {
       try {
         console.log("📝 Insertando transacción de forma directa...");
+        
+        // Casteamos el parámetro como 'any' para que TypeScript nos deje mapear al inglés de Supabase sin chillar
+        const t = transaction as any;
+
         const { error } = await supabase
           .from('transactions')
           .insert([{
-            date: transaction.date,
-            description: transaction.description,
-            amount: transaction.amount,
-            currency: transaction.currency,
-            account_id: (transaction as any).account_id || (transaction as any).cuentaId,
-            transaction_type_id: transaction.transaction_type_id
+            date: t.fecha || t.date, 
+            description: t.descripcion || t.description,
+            amount: t.monto || t.amount,
+            currency: t.moneda || t.currency,
+            account_id: t.cuentaId || t.account_id,
+            transaction_type_id: t.transaction_type_id || t.typeId
           }]);
 
         if (error) throw error;
