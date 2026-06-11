@@ -31,8 +31,8 @@ const Tabs: React.FC<TabsProps> = ({ children }) => {
               key={child.props.label}
               onClick={() => setActiveTab(child.props.label)}
               className={`whitespace-nowrap border-b-2 py-4 px-1 text-sm font-medium ${activeTab === child.props.label
-                  ? 'border-indigo-500 text-indigo-600'
-                  : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+                ? 'border-indigo-500 text-indigo-600'
+                : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
                 }`}
             >
               {child.props.label}
@@ -152,11 +152,11 @@ const ListManager: React.FC<{
               )}
               <button
                 onClick={() => {
-                    const confirmar = window.confirm("⚠️ ¿Estás seguro de eliminar este elemento? Esta acción afectará a todos los usuarios de la organización y es irreversible.");
-                    if (confirmar) {
-                      onDelete(item.id);
-                    }
-                  }}
+                  const confirmar = window.confirm("⚠️ ¿Estás seguro de eliminar este elemento? Esta acción afectará a todos los usuarios de la organización y es irreversible.");
+                  if (confirmar) {
+                    onDelete(item.id);
+                  }
+                }}
                 className={`text-red-600 hover:text-red-900 ${!isDeletable(item.id) ? 'disabled:opacity-40 disabled:cursor-not-allowed' : ''
                   }`}
                 disabled={!isDeletable(item.id)}
@@ -195,32 +195,52 @@ export default function ConfiguracionPage() {
     transactions,
   } = useFinanzasStore();
 
-  // 1. Nos aseguramos de estar en el cliente de forma real
+  // =========================================================================
+  // 🏆 CONTROL DE ACCESO REACTIVO Y SINCRONIZACIÓN CON SUPABASE
+  // =========================================================================
   useEffect(() => {
     setMounted(true);
-  }, []);
 
-  // 2. Candado basado en el Estado Real del SaaS
-  useEffect(() => {
-    const chequearAccesoReal = async () => {
-      // Intentamos sincronizar datos con el Store primero
-      await fetchInitialData();
+    console.log("⏳ Activando escucha reactiva de sesión en Configuración...");
 
-      // Conectamos directamente con el estado vivo de Zustand
-      const estadoActual = useFinanzasStore.getState();
+    // Escuchamos de forma viva el estado de autenticación de Supabase
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log(`🔄 CONFIG - EVENTO AUTH: ${event}`, session ? "Hay sesión" : "No hay sesión");
 
-      // Si el Store no pudo traer ni un solo grupo de cuentas, es porque no hay sesión o falló la API
-      if (estadoActual.accountGroups.length === 0) {
-        window.location.href = '/login';
-      } else {
-        setAuthed(true);
+      if (session?.user) {
+        try {
+          // Aseguramos la data levantando la ráfaga solo si hay sesión real
+          await fetchInitialData();
+
+          // Verificamos el estado después de la ráfaga
+          const estadoActual = useFinanzasStore.getState();
+          setAuthed(true);
+        } catch (error) {
+          console.error("❌ Error en la ráfaga de configuración:", error);
+          // Si falla la API de verdad, lo mandamos al login
+          router.push('/login');
+        }
+      } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
+        // Si de entrada no hay sesión o se deslogueó, al login de forma suave con el router de Next
+        router.push('/login');
       }
-    };
+    });
 
-    if (mounted) {
-      chequearAccesoReal();
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [fetchInitialData, router]);
+
+  // Seteo de selects por defecto una vez que todo está maduro
+  useEffect(() => {
+    if (mounted && authed && (accountGroups.length > 0 || accountCategories.length > 0)) {
+      setNewAccount((prev) => ({
+        ...prev,
+        account_group_id: prev.account_group_id || (accountGroups[0]?.id || ''),
+        account_category_id: prev.account_category_id || (accountCategories[0]?.id || ''),
+      }));
     }
-  }, [mounted, fetchInitialData]);
+  }, [mounted, authed, accountGroups, accountCategories]);
 
   // 🏆 Declaración ordenada de Hooks (El useState de newAccount que va abajo queda igual...)
   const [newAccount, setNewAccount] = useState<Omit<Account, 'id' | 'grupo' | 'categoria' | 'current_amount' | 'user_id' | 'created_at'> & { account_group_id: string; account_category_id: string }>({
@@ -306,9 +326,26 @@ export default function ConfiguracionPage() {
     }
   };
 
-  // 🔒 Control de renderizado al final del archivo
-  if (!mounted || !authed) {
-    return null;
+  // =========================================================================
+  // 🔒 CONTROL DE RENDERIZADO AL FINAL DEL ARCHIVO
+  // =========================================================================
+  if (!mounted) {
+    return (
+      <div className="flex h-screen items-center justify-center p-8 text-sm text-gray-500">
+        Levantando entorno local...
+      </div>
+    );
+  }
+
+  if (!authed) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center space-y-4 bg-gray-50 p-8">
+        <div className="h-8 w-8 animate-spin rounded-full border-4 border-indigo-600 border-t-transparent"></div>
+        <p className="text-sm font-medium text-gray-600">
+          Sincronizando ráfaga de datos con Supabase Auth...
+        </p>
+      </div>
+    );
   }
 
   return (

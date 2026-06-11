@@ -359,7 +359,17 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
 
                     <td className="p-4 text-center">
                       <button
-                        onClick={() => deleteTransaction(t.id)}
+                        onClick={() => {
+                          // 🚨 Candado de seguridad antes de hacer desaparecer nada
+                          const confirmar = window.confirm(
+                            "⚠️ ¿Estás seguro de que deseas anular esta transacción? Esta acción modificará los balances de la cuenta de forma definitiva."
+                          );
+
+                          if (confirmar) {
+                            console.log("🔍 DETECTOR DE ID DE TRANSACCIÓN:", t);
+                            deleteTransaction(t.id);
+                          }
+                        }}
                         className="text-red-600 hover:text-red-900 transition transform hover:scale-110"
                         title="Anular Transacción"
                       >

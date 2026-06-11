@@ -20,7 +20,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
   if (typeof window === 'undefined' || !globalSupabase) {
     return;
   }
-  
+
   set({ isFetching: true });
 
   try {
@@ -69,11 +69,11 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
         current_amount: Number(acc.current_amount) || 0, // Agregado
         user_id: null, // Agregado virtualmente
         created_at: acc.created_at, // Agregado
-        
+
         // 🔑 IDs reales para persistencia limpia y encapsulada
         account_group_id: acc.account_group_id || '',
         account_category_id: acc.account_category_id || '',
-        
+
         // 🔄 Campos calculados virtuales de compatibilidad (evitan romper el Dashboard)
         grupo: grupoObj ? grupoObj.name : 'Otros',
         categoria: catObj ? catObj.name : 'Sin Categoría'
@@ -87,7 +87,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
       transactions: transactions || [],
       accounts: mappedAccounts
     });
-    
+
     console.log("🎉 ¡ÉXITO TOTAL! Todo el Store se actualizó correctamente tras el F5.");
   } catch (err) {
     console.error('🔥 Error real atrapado en las consultas del Store:', JSON.stringify(err, null, 2));
@@ -115,16 +115,34 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
         console.error('Error al delegar inserción de transacción:', err);
       }
     },
-  
+
     deleteTransaction: async (id: string) => {
-      try {
-        const supabase = createClientSupabaseClient();
-        const supabaseTransactionRepository = new SupabaseTransactionRepository(supabase);
-        await supabaseTransactionRepository.delete(id);
-        await get().fetchInitialData();
-      } catch (err) {
-        console.error('Error al delegar eliminación de transacción:', err);
-      }
+      // 1. ACTUALIZACIÓN OPTIMISTA: Borramos el registro del estado local YA mismo
+      const transaccionesPrevias = get().transactions;
+      const transaccionesFiltradas = transaccionesPrevias.filter(t => t.id !== id);
+      
+      console.log(`✨ OPTIMISTIC: Removiendo transacción ${id} de la pantalla de inmediato.`);
+      set({ transactions: transaccionesFiltradas });
+
+      // 2. Mandamos la orden a Supabase en segundo plano sin trabar la app con un await pesado
+      const supabase = createClientSupabaseClient();
+      console.log(`🗑️ BASE DE DATOS: Ejecutando borrado asincrónico para ID: ${id}`);
+      
+      supabase
+        .from('transactions')
+        .delete()
+        .eq('id', id)
+        .then(({ error }) => {
+          if (error) {
+            console.error("❌ Error diferido al borrar en Supabase:", error);
+            // Si falló de verdad en el servidor, revertimos el cambio para que no mienta la UI
+            set({ transactions: transaccionesPrevias });
+          } else {
+            console.log("✅ Servidor confirmó la eliminación con éxito.");
+            // Refrescamos los balances en segundo plano
+            get().fetchInitialData();
+          }
+        });
     },
 
     // 3. OPERACIONES DE CUENTAS ENCAPSULADAS (Puras, limpias y basadas en IDs)
@@ -182,7 +200,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       try {
         const supabase = createClientSupabaseClient();
         console.log(`🗑️ Eliminando cuenta ID: ${id}`);
-        
+
         const { error } = await supabase
           .from('accounts')
           .delete()
@@ -203,7 +221,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
         const { error } = await supabase
           .from('account_groups')
           .insert([{ name }]);
-          
+
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -218,7 +236,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           .from('account_groups')
           .update({ name: newName })
           .eq('id', id);
-          
+
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -233,7 +251,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           .from('account_groups')
           .delete()
           .eq('id', id);
-          
+
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -247,7 +265,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
         const { error } = await supabase
           .from('account_categories')
           .insert([{ name }]);
-          
+
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -262,7 +280,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           .from('account_categories')
           .update({ name: newName })
           .eq('id', id);
-          
+
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -277,7 +295,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           .from('account_categories')
           .delete()
           .eq('id', id);
-          
+
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -289,14 +307,14 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     getAccountBalance: (accountId) => {
       const cuenta = get().accounts.find((a) => a.id === accountId);
       if (!cuenta) return 0;
-      
+
       const balance = get().transactions
         .filter((t) => t.cuentaId === accountId)
         .reduce((acc, t) => {
           const tipoEncontrado = get().transactionTypes.find(
             (tt) => tt.id === t.transaction_type_id || tt.id === (t as any).typeId
           );
-          
+
           const nombreTipo = tipoEncontrado?.name?.toLowerCase().trim() || '';
           const codigoTipo = tipoEncontrado?.code?.toLowerCase().trim() || '';
           const montoAbs = Math.abs(t.monto);
