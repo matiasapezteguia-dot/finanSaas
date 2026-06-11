@@ -1,7 +1,7 @@
 import { create, StoreApi } from 'zustand';
 import { Account, Transaction, StoreState, AccountCategory, FinanzasStoreContextType, MonedaType } from '../types/finanzas';
-import { createClientSupabaseClient } from '../utils/supabase/client';
-import { SupabaseTransactionRepository } from './repositories/SupabaseTransactionRepository';
+// 🔑 Conectamos tu store con el archivo único que me pasaste recién
+import { supabase } from '../lib/supabaseClient';
 
 const initialState: StoreState = {
   transactions: [],
@@ -13,40 +13,36 @@ const initialState: StoreState = {
   isFetching: false,
 };
 
-// 🔒 SINGLETON GLOBAL: Evita colisiones de sockets y listeners duplicados en Next.js 15+ tras F5
-const globalSupabase = typeof window !== 'undefined' ? createClientSupabaseClient() : null;
-
 const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['setState'], get: StoreApi<FinanzasStoreContextType>['getState']) => {
-  if (typeof window === 'undefined' || !globalSupabase) {
+  if (typeof window === 'undefined') {
     return;
   }
-
+  
   set({ isFetching: true });
 
   try {
-    const supabaseTransactionRepository = new SupabaseTransactionRepository(globalSupabase);
-
     console.log("🕵️‍♂️ DETECTOR: Iniciando ráfaga paralela de alta velocidad hacia Supabase...");
 
-    // Disparamos las 5 consultas en simultáneo directo por el mismo caño sin repositorios rotos
+    // 🚀 BYPASS COMPLETO: Consultas directas por tu cliente único de Supabase
     const [
       groupsRes,
       categoriesRes,
       typesRes,
-      transactions,
+      transactionsRes,
       accountsRes
     ] = await Promise.all([
-      globalSupabase.from('account_groups').select('id, name'),
-      globalSupabase.from('account_categories').select('id, name'),
-      globalSupabase.from('transaction_types').select('id, name, code'),
-      supabaseTransactionRepository.fetchAll(),
-      globalSupabase.from('accounts').select('id, created_at, name, currency, initial_amount, current_amount, account_group_id, account_category_id')
+      supabase.from('account_groups').select('id, name'),
+      supabase.from('account_categories').select('id, name'),
+      supabase.from('transaction_types').select('id, name, code'),
+      supabase.from('transactions').select('*'), 
+      supabase.from('accounts').select('id, created_at, name, currency, initial_amount, current_amount, account_group_id, account_category_id')
     ]);
 
     // Validamos errores de las consultas directas
     if (groupsRes.error) throw groupsRes.error;
     if (categoriesRes.error) throw categoriesRes.error;
     if (typesRes.error) throw typesRes.error;
+    if (transactionsRes.error) throw transactionsRes.error;
     if (accountsRes.error) throw accountsRes.error;
 
     const accountGroups = groupsRes.data || [];
@@ -56,7 +52,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
 
     console.log("⚡ ¡Ráfaga exitosa! Datos base sincronizados.");
 
-    // 🔄 HIDRATACIÓN EN CALIENTE HÍBRIDA: Inyectamos los IDs reales para la lógica y resolvemos los nombres legibles para la UI antigua
+    // 🔄 HIDRATACIÓN EN CALIENTE HÍBRIDA
     const mappedAccounts: Account[] = rawAccounts.map((acc) => {
       const grupoObj = accountGroups.find(g => g.id === acc.account_group_id);
       const catObj = accountCategories.find(c => c.id === acc.account_category_id);
@@ -66,15 +62,15 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
         nombre: acc.name || 'Sin Nombre',
         moneda: (acc.currency as 'ARS' | 'USD') || 'ARS',
         montoInicial: Number(acc.initial_amount) || 0,
-        current_amount: Number(acc.current_amount) || 0, // Agregado
-        user_id: null, // Agregado virtualmente
-        created_at: acc.created_at, // Agregado
-
-        // 🔑 IDs reales para persistencia limpia y encapsulada
+        current_amount: Number(acc.current_amount) || 0, 
+        user_id: null, 
+        created_at: acc.created_at, 
+        
+        // IDs reales para persistencia limpia
         account_group_id: acc.account_group_id || '',
         account_category_id: acc.account_category_id || '',
-
-        // 🔄 Campos calculados virtuales de compatibilidad (evitan romper el Dashboard)
+        
+        // Campos calculados virtuales de compatibilidad para el Dashboard antiguo
         grupo: grupoObj ? grupoObj.name : 'Otros',
         categoria: catObj ? catObj.name : 'Sin Categoría'
       };
@@ -84,11 +80,11 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
       accountGroups: accountGroups as any[],
       accountCategories: accountCategories as any[],
       transactionTypes: transactionTypes as any[],
-      transactions: transactions || [],
+      transactions: transactionsRes.data || [],
       accounts: mappedAccounts
     });
-
-    console.log("🎉 ¡ÉXITO TOTAL! Todo el Store se actualizó correctamente tras el F5.");
+    
+    console.log("🎉 ¡ÉXITO TOTAL! Todo el Store se actualizó correctamente.");
   } catch (err) {
     console.error('🔥 Error real atrapado en las consultas del Store:', JSON.stringify(err, null, 2));
   } finally {
@@ -104,54 +100,68 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     fetchInitialData: () => fetchInitialDataLogic(set, get),
 
-    // 2. OPERACIONES DE MOVIMIENTOS DESACOPLADAS
+    // =========================================================================
+    // 📊 OPERACIONES DE MOVIMIENTOS OPTIMIZADAS
+    // =========================================================================
     addTransaction: async (transaction: Omit<Transaction, 'id' | 'created_at'>) => {
       try {
-        const supabase = createClientSupabaseClient();
-        const supabaseTransactionRepository = new SupabaseTransactionRepository(supabase);
-        await supabaseTransactionRepository.save(transaction);
+        console.log("📝 Insertando transacción de forma directa...");
+        const { error } = await supabase
+          .from('transactions')
+          .insert([{
+            date: transaction.date,
+            description: transaction.description,
+            amount: transaction.amount,
+            currency: transaction.currency,
+            account_id: (transaction as any).account_id || (transaction as any).cuentaId,
+            transaction_type_id: transaction.transaction_type_id
+          }]);
+
+        if (error) throw error;
         await get().fetchInitialData();
       } catch (err) {
-        console.error('Error al delegar inserción de transacción:', err);
+        console.error('🔥 Error al insertar transacción:', err);
+      }
+    },
+  
+    deleteTransaction: async (id: string) => {
+      try {
+        // 1. ACTUALIZACIÓN OPTIMISTA: Borramos de la pantalla YA mismo
+        const transaccionesPrevias = get().transactions;
+        const transaccionesFiltradas = transaccionesPrevias.filter(t => t.id !== id);
+        
+        console.log(`✨ OPTIMISTIC: Removiendo transacción ${id} de la pantalla de inmediato.`);
+        set({ transactions: transaccionesFiltradas });
+
+        // 2. Mandamos la orden a tu Supabase global sin bloquear con await
+        console.log(`🗑️ BASE DE DATOS: Ejecutando borrado asincrónico para ID: ${id}`);
+        
+        supabase
+          .from('transactions')
+          .delete()
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) {
+              console.error("❌ Error diferido al borrar en Supabase:", error);
+              // Si falla, revertimos el estado local
+              set({ transactions: transaccionesPrevias });
+            } else {
+              console.log("✅ Servidor confirmó la eliminación con éxito.");
+              get().fetchInitialData();
+            }
+          });
+      } catch (err) {
+        console.error('🔥 Error crítico al delegar eliminación de transacción:', err);
       }
     },
 
-    deleteTransaction: async (id: string) => {
-      // 1. ACTUALIZACIÓN OPTIMISTA: Borramos el registro del estado local YA mismo
-      const transaccionesPrevias = get().transactions;
-      const transaccionesFiltradas = transaccionesPrevias.filter(t => t.id !== id);
-      
-      console.log(`✨ OPTIMISTIC: Removiendo transacción ${id} de la pantalla de inmediato.`);
-      set({ transactions: transaccionesFiltradas });
-
-      // 2. Mandamos la orden a Supabase en segundo plano sin trabar la app con un await pesado
-      const supabase = createClientSupabaseClient();
-      console.log(`🗑️ BASE DE DATOS: Ejecutando borrado asincrónico para ID: ${id}`);
-      
-      supabase
-        .from('transactions')
-        .delete()
-        .eq('id', id)
-        .then(({ error }) => {
-          if (error) {
-            console.error("❌ Error diferido al borrar en Supabase:", error);
-            // Si falló de verdad en el servidor, revertimos el cambio para que no mienta la UI
-            set({ transactions: transaccionesPrevias });
-          } else {
-            console.log("✅ Servidor confirmó la eliminación con éxito.");
-            // Refrescamos los balances en segundo plano
-            get().fetchInitialData();
-          }
-        });
-    },
-
-    // 3. OPERACIONES DE CUENTAS ENCAPSULADAS (Puras, limpias y basadas en IDs)
+    // =========================================================================
+    // 💳 OPERACIONES DE CUENTAS ENCAPSULADAS
+    // =========================================================================
     addAccount: async (nuevaCuenta) => {
       try {
-        const supabase = createClientSupabaseClient();
         console.log("📝 Insertando cuenta de forma directa usando IDs limpios:", nuevaCuenta);
 
-        // 🚀 ELIMINADAS LAS BÚSQUEDAS POR TEXTO: Los datos ya llegan con los IDs desde el componente visual
         const { error } = await supabase
           .from('accounts')
           .insert([{
@@ -159,8 +169,8 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
             currency: nuevaCuenta.moneda,
             initial_amount: nuevaCuenta.montoInicial,
             current_amount: nuevaCuenta.montoInicial,
-            account_group_id: nuevaCuenta.account_group_id,     // ID directo
-            account_category_id: nuevaCuenta.account_category_id // ID directo
+            account_group_id: nuevaCuenta.account_group_id,     
+            account_category_id: nuevaCuenta.account_category_id 
           }]);
 
         if (error) throw error;
@@ -173,18 +183,16 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     updateAccount: async (cuentaModificada) => {
       try {
-        const supabase = createClientSupabaseClient();
-        console.log(`📝 Actualizando cuenta ID de forma directa usando IDs limpios: ${cuentaModificada.id}`);
+        console.log(`📝 Actualizando cuenta ID de forma directa: ${cuentaModificada.id}`);
 
-        // 🚀 ELIMINADAS LAS BÚSQUEDAS POR TEXTO: Modificación directa e inmediata
         const { error } = await supabase
           .from('accounts')
           .update({
             name: cuentaModificada.nombre,
             currency: cuentaModificada.moneda,
             initial_amount: cuentaModificada.montoInicial,
-            account_group_id: cuentaModificada.account_group_id,     // ID directo
-            account_category_id: cuentaModificada.account_category_id // ID directo
+            account_group_id: cuentaModificada.account_group_id,     
+            account_category_id: cuentaModificada.account_category_id 
           })
           .eq('id', cuentaModificada.id);
 
@@ -198,9 +206,8 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     deleteAccount: async (id: string) => {
       try {
-        const supabase = createClientSupabaseClient();
         console.log(`🗑️ Eliminando cuenta ID: ${id}`);
-
+        
         const { error } = await supabase
           .from('accounts')
           .delete()
@@ -214,14 +221,15 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    // 4. MANTENIMIENTO DE ESTRUCTURAS SECUNDARIAS (Bypass de Repositorio Roto)
+    // =========================================================================
+    // 📁 MANTENIMIENTO DE ESTRUCTURAS SECUNDARIAS
+    // =========================================================================
     addAccountGroup: async (name: string) => {
       try {
-        const supabase = createClientSupabaseClient();
         const { error } = await supabase
           .from('account_groups')
           .insert([{ name }]);
-
+          
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -231,12 +239,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     updateAccountGroup: async (id: string, newName: string) => {
       try {
-        const supabase = createClientSupabaseClient();
         const { error } = await supabase
           .from('account_groups')
           .update({ name: newName })
           .eq('id', id);
-
+          
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -246,12 +253,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     deleteAccountGroup: async (id: string) => {
       try {
-        const supabase = createClientSupabaseClient();
         const { error } = await supabase
           .from('account_groups')
           .delete()
           .eq('id', id);
-
+          
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -261,11 +267,10 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     addAccountCategory: async (name: string) => {
       try {
-        const supabase = createClientSupabaseClient();
         const { error } = await supabase
           .from('account_categories')
           .insert([{ name }]);
-
+          
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -275,12 +280,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     updateAccountCategory: async (id: string, newName: string) => {
       try {
-        const supabase = createClientSupabaseClient();
         const { error } = await supabase
           .from('account_categories')
           .update({ name: newName })
           .eq('id', id);
-
+          
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -290,12 +294,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
     deleteAccountCategory: async (id: string) => {
       try {
-        const supabase = createClientSupabaseClient();
         const { error } = await supabase
           .from('account_categories')
           .delete()
           .eq('id', id);
-
+          
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
@@ -303,18 +306,20 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
       }
     },
 
-    // 5. INTELIGENCIA CONTABLE BILINGÜE INTEGRADORA
+    // =========================================================================
+    // 🧠 INTELIGENCIA CONTABLE INTEGRADORA
+    // =========================================================================
     getAccountBalance: (accountId) => {
       const cuenta = get().accounts.find((a) => a.id === accountId);
       if (!cuenta) return 0;
-
+      
       const balance = get().transactions
         .filter((t) => t.cuentaId === accountId)
         .reduce((acc, t) => {
           const tipoEncontrado = get().transactionTypes.find(
             (tt) => tt.id === t.transaction_type_id || tt.id === (t as any).typeId
           );
-
+          
           const nombreTipo = tipoEncontrado?.name?.toLowerCase().trim() || '';
           const codigoTipo = tipoEncontrado?.code?.toLowerCase().trim() || '';
           const montoAbs = Math.abs(t.monto);
