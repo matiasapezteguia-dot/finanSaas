@@ -1,6 +1,6 @@
 import { create, StoreApi } from 'zustand';
 import { Account, Transaction, StoreState, AccountCategory, FinanzasStoreContextType, MonedaType } from '../types/finanzas';
-// 🔑 Conectamos tu store con el archivo único que me pasaste recién
+// 🔑 IMPORTACIÓN UNIFICADA CENTRALIZADA
 import { supabase } from '../lib/supabaseClient';
 
 const initialState: StoreState = {
@@ -23,7 +23,6 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
   try {
     console.log("🕵️‍♂️ DETECTOR: Iniciando ráfaga paralela de alta velocidad hacia Supabase...");
 
-    // 🚀 BYPASS COMPLETO: Consultas directas por tu cliente único de Supabase
     const [
       groupsRes,
       categoriesRes,
@@ -38,7 +37,6 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
       supabase.from('accounts').select('id, created_at, name, currency, initial_amount, current_amount, account_group_id, account_category_id')
     ]);
 
-    // Validamos errores de las consultas directas
     if (groupsRes.error) throw groupsRes.error;
     if (categoriesRes.error) throw categoriesRes.error;
     if (typesRes.error) throw typesRes.error;
@@ -52,7 +50,6 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
 
     console.log("⚡ ¡Ráfaga exitosa! Datos base sincronizados.");
 
-    // 🔄 HIDRATACIÓN EN CALIENTE HÍBRIDA
     const mappedAccounts: Account[] = rawAccounts.map((acc) => {
       const grupoObj = accountGroups.find(g => g.id === acc.account_group_id);
       const catObj = accountCategories.find(c => c.id === acc.account_category_id);
@@ -65,12 +62,8 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
         current_amount: Number(acc.current_amount) || 0, 
         user_id: null, 
         created_at: acc.created_at, 
-        
-        // IDs reales para persistencia limpia
         account_group_id: acc.account_group_id || '',
         account_category_id: acc.account_category_id || '',
-        
-        // Campos calculados virtuales de compatibilidad para el Dashboard antiguo
         grupo: grupoObj ? grupoObj.name : 'Otros',
         categoria: catObj ? catObj.name : 'Sin Categoría'
       };
@@ -101,45 +94,49 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     fetchInitialData: () => fetchInitialDataLogic(set, get),
 
     // =========================================================================
-    // 📊 OPERACIONES DE MOVIMIENTOS OPTIMIZADAS
+    // 📊 OPERACIONES DE MOVIMIENTOS OPTIMIZADAS (EN INGLÉS DEFINITIVO)
     // =========================================================================
     addTransaction: async (transaction: Omit<Transaction, 'id' | 'created_at'>) => {
+      if (get().isFetching) return;
+      
       try {
         console.log("📝 Insertando transacción de forma directa...");
+        set({ isFetching: true });
         
-        // Casteamos el parámetro como 'any' para que TypeScript nos deje mapear al inglés de Supabase sin chillar
         const t = transaction as any;
+        const payload = {
+          transaction_date: t.fecha || t.date || t.transaction_date,
+          description: t.descripcion || t.description,
+          amount: Number(t.monto || t.amount) || 0,
+          currency: t.moneda || t.currency,
+          account_id: t.cuentaId || t.account_id,
+          transaction_type_id: t.transaction_type_id || t.typeId
+        };
 
-        const { error } = await supabase
-          .from('transactions')
-          .insert([{
-            date: t.fecha || t.date, 
-            description: t.descripcion || t.description,
-            amount: t.monto || t.amount,
-            currency: t.moneda || t.currency,
-            account_id: t.cuentaId || t.account_id,
-            transaction_type_id: t.transaction_type_id || t.typeId
-          }]);
+        const { error } = await supabase.from('transactions').insert([payload]);
 
-        if (error) throw error;
-        await get().fetchInitialData();
+        if (error) {
+          console.error('🔥 Error retornado por Supabase:', error);
+          alert(`Error de base de datos: ${error.message}`);
+        } else {
+          console.log("✅ Servidor confirmó la inserción con éxito.");
+          await get().fetchInitialData();
+        }
       } catch (err) {
-        console.error('🔥 Error al insertar transacción:', err);
+        console.error('🔥 Error crítico en el hilo de addTransaction:', err);
+      } finally {
+        set({ isFetching: false });
       }
     },
   
     deleteTransaction: async (id: string) => {
       try {
-        // 1. ACTUALIZACIÓN OPTIMISTA: Borramos de la pantalla YA mismo
         const transaccionesPrevias = get().transactions;
         const transaccionesFiltradas = transaccionesPrevias.filter(t => t.id !== id);
         
-        console.log(`✨ OPTIMISTIC: Removiendo transacción ${id} de la pantalla de inmediato.`);
+        console.log(`✨ OPTIMISTIC: Removiendo transacción ${id} de la pantalla.`);
         set({ transactions: transaccionesFiltradas });
 
-        // 2. Mandamos la orden a tu Supabase global sin bloquear con await
-        console.log(`🗑️ BASE DE DATOS: Ejecutando borrado asincrónico para ID: ${id}`);
-        
         supabase
           .from('transactions')
           .delete()
@@ -147,15 +144,15 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           .then(({ error }) => {
             if (error) {
               console.error("❌ Error diferido al borrar en Supabase:", error);
-              // Si falla, revertimos el estado local
               set({ transactions: transaccionesPrevias });
+              alert(`No se pudo borrar: ${error.message}`);
             } else {
               console.log("✅ Servidor confirmó la eliminación con éxito.");
               get().fetchInitialData();
             }
           });
       } catch (err) {
-        console.error('🔥 Error crítico al delegar eliminación de transacción:', err);
+        console.error('🔥 Error crítico al eliminar transacción:', err);
       }
     },
 
@@ -164,7 +161,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     // =========================================================================
     addAccount: async (nuevaCuenta) => {
       try {
-        console.log("📝 Insertando cuenta de forma directa usando IDs limpios:", nuevaCuenta);
+        console.log("📝 Insertando cuenta de forma directa:", nuevaCuenta);
 
         const { error } = await supabase
           .from('accounts')
@@ -178,17 +175,14 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           }]);
 
         if (error) throw error;
-        console.log("✅ Cuenta guardada exitosamente.");
         await get().fetchInitialData();
       } catch (err) {
-        console.error('🔥 Error al insertar cuenta mapeada:', err);
+        console.error('🔥 Error al insertar cuenta:', err);
       }
     },
 
     updateAccount: async (cuentaModificada) => {
       try {
-        console.log(`📝 Actualizando cuenta ID de forma directa: ${cuentaModificada.id}`);
-
         const { error } = await supabase
           .from('accounts')
           .update({
@@ -201,24 +195,20 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           .eq('id', cuentaModificada.id);
 
         if (error) throw error;
-        console.log("✅ Cuenta actualizada exitosamente.");
         await get().fetchInitialData();
       } catch (err) {
-        console.error('🔥 Error al actualizar cuenta mapeada:', err);
+        console.error('🔥 Error al actualizar cuenta:', err);
       }
     },
 
     deleteAccount: async (id: string) => {
       try {
-        console.log(`🗑️ Eliminando cuenta ID: ${id}`);
-        
         const { error } = await supabase
           .from('accounts')
           .delete()
           .eq('id', id);
 
         if (error) throw error;
-        console.log("✅ Cuenta eliminada con éxito.");
         await get().fetchInitialData();
       } catch (err) {
         console.error('🔥 Error al eliminar cuenta:', err);
@@ -230,110 +220,92 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     // =========================================================================
     addAccountGroup: async (name: string) => {
       try {
-        const { error } = await supabase
-          .from('account_groups')
-          .insert([{ name }]);
-          
+        const { error } = await supabase.from('account_groups').insert([{ name }]);
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error("🔥 Error directo al agregar grupo:", error);
+        console.error("🔥 Error al agregar grupo:", error);
       }
     },
 
     updateAccountGroup: async (id: string, newName: string) => {
       try {
-        const { error } = await supabase
-          .from('account_groups')
-          .update({ name: newName })
-          .eq('id', id);
-          
+        const { error } = await supabase.from('account_groups').update({ name: newName }).eq('id', id);
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error("🔥 Error directo al actualizar grupo:", error);
+        console.error("🔥 Error al actualizar grupo:", error);
       }
     },
 
     deleteAccountGroup: async (id: string) => {
       try {
-        const { error } = await supabase
-          .from('account_groups')
-          .delete()
-          .eq('id', id);
-          
+        const { error } = await supabase.from('account_groups').delete().eq('id', id);
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error("🔥 Error directo al eliminar grupo:", error);
+        console.error("🔥 Error al eliminar grupo:", error);
       }
     },
 
     addAccountCategory: async (name: string) => {
       try {
-        const { error } = await supabase
-          .from('account_categories')
-          .insert([{ name }]);
-          
+        const { error } = await supabase.from('account_categories').insert([{ name }]);
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error("🔥 Error directo al agregar categoría:", error);
+        console.error("🔥 Error al agregar categoría:", error);
       }
     },
 
     updateAccountCategory: async (id: string, newName: string) => {
       try {
-        const { error } = await supabase
-          .from('account_categories')
-          .update({ name: newName })
-          .eq('id', id);
-          
+        const { error } = await supabase.from('account_categories').update({ name: newName }).eq('id', id);
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error("🔥 Error directo al actualizar categoría:", error);
+        console.error("🔥 Error al actualizar categoría:", error);
       }
     },
 
     deleteAccountCategory: async (id: string) => {
       try {
-        const { error } = await supabase
-          .from('account_categories')
-          .delete()
-          .eq('id', id);
-          
+        const { error } = await supabase.from('account_categories').delete().eq('id', id);
         if (error) throw error;
         await get().fetchInitialData();
       } catch (error) {
-        console.error("🔥 Error directo al eliminar categoría:", error);
+        console.error("🔥 Error al eliminar categoría:", error);
       }
     },
 
     // =========================================================================
     // 🧠 INTELIGENCIA CONTABLE INTEGRADORA
     // =========================================================================
-    getAccountBalance: (accountId) => {
+   getAccountBalance: (accountId) => {
       const cuenta = get().accounts.find((a) => a.id === accountId);
       if (!cuenta) return 0;
       
       const balance = get().transactions
-        .filter((t) => t.cuentaId === accountId)
+        .filter((t) => (t as any).account_id === accountId || (t as any).cuentaId === accountId)
         .reduce((acc, t) => {
           const tipoEncontrado = get().transactionTypes.find(
-            (tt) => tt.id === t.transaction_type_id || tt.id === (t as any).typeId
+            (tt) => tt.id === (t as any).transaction_type_id || tt.id === (t as any).typeId
           );
           
           const nombreTipo = tipoEncontrado?.name?.toLowerCase().trim() || '';
           const codigoTipo = tipoEncontrado?.code?.toLowerCase().trim() || '';
-          const montoAbs = Math.abs(t.monto);
+          
+          // 🔑 CORREGIDO: "amount" bien escrito y con (t as any)
+          const montoAbs = Math.abs((t as any).amount || (t as any).monto || 0);
 
           if (nombreTipo === 'ingreso' || codigoTipo === 'income') {
             return acc + montoAbs;
           } else if (nombreTipo === 'egreso' || codigoTipo === 'expense') {
             return acc - montoAbs;
           } else {
-            return t.monto < 0 ? acc - montoAbs : acc + t.monto;
+            // 🔑 CORREGIDO: "amount" bien escrito acá también
+            const m = (t as any).amount || (t as any).monto || 0;
+            return m < 0 ? acc - montoAbs : acc + m;
           }
         }, cuenta.montoInicial);
 

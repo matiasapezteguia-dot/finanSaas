@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { createClientSupabaseClient } from "@/utils/supabase/client";
+// 🔑 IMPORTACIÓN UNIFICADA: Usamos el cliente único centralizado
+import { supabase } from "@/lib/supabaseClient";
 import { useFinanzasStore } from "@/lib/store";
 import AccountDetailModal from "@/components/AccountDetailModal";
 import DashboardKPIs from "@/components/DashboardKPIs";
@@ -13,7 +14,6 @@ import AddTransactionModal from "@/components/modals/AddTransactionModal";
 export default function Dashboard() {
   const [mounted, setMounted] = useState(false);
   const router = useRouter();
-  //const supabase = createClientSupabaseClient();
 
   const {
     transactions,
@@ -30,19 +30,16 @@ export default function Dashboard() {
   // Orquestador de inicialización inmune a congelamientos por F5 y navegación entre rutas
   useEffect(() => {
     console.log("🚀 COMUNICADO 1: El useEffect del Dashboard arrancó.");
-
-    const supabaseInstance = createClientSupabaseClient();
     let isSubscribed = true;
 
     // Función auxiliar para cargar los datos y despertar la pantalla
     const inicializarDatosDashboard = async () => {
       try {
-        const supabaseInstance = createClientSupabaseClient();
-        const { data: { session } } = await supabaseInstance.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
 
-        // 🔒 CONTROL ABSOLUTO: Si no hay sesión madura en el cliente, abortamos el inicio y mandamos a login
+        // 🔒 CONTROL ABSOLUTO: Si no hay sesión madura, abortamos el inicio
         if (!session) {
-          console.log("🛑 Intento de acceso no autorizado. Bloqueando Dashboard y redirigiendo...");
+          console.log("🛑 Intento de acceso no autorizado. Redirigiendo...");
           router.push("/login");
           return;
         }
@@ -61,10 +58,13 @@ export default function Dashboard() {
 
     // 🔒 DOBLE VERIFICACIÓN INMEDIATA (Soluciona la pantalla blanca o el "Cargando..." perpetuo)
     const verificarSesionActual = async () => {
-      const { data: { session } } = await supabaseInstance.auth.getSession();
+      const { data: { session } } = await supabase.auth.getSession();
       if (session) {
         console.log("🔑 Sesión madura detectada en caché inmediata para:", session.user?.email);
         await inicializarDatosDashboard();
+      } else {
+        // Si no hay sesión de entrada, forzamos redirección limpia
+        router.push("/login");
       }
     };
 
@@ -72,11 +72,12 @@ export default function Dashboard() {
 
     console.log("⏳ Activando canal reactivo en segundo plano por si la sesión cambia...");
 
-    const { data: { subscription } } = supabaseInstance.auth.onAuthStateChange(async (event, session) => {
+    // Escuchamos los cambios de auth usando la instancia compartida global
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       console.log("🔄 EVENTO DE AUTENTICACIÓN DETECTADO:", event, session ? "Hay sesión" : "No hay sesión");
 
-      if (event === 'SIGNED_IN' || session) {
-        // Si no se despertó por la verificación inmediata, se despierta por el evento reactivo
+      // 🔑 EL CANDADO CLAVE: Evitamos re-inicializar el Dashboard con cada SIGNED_IN fantasma si ya está montado
+      if (event === 'SIGNED_IN' && session && !mounted) {
         await inicializarDatosDashboard();
       } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
         console.log("⚠️ No hay sesión activa. Redirigiendo a /login.");
@@ -91,7 +92,7 @@ export default function Dashboard() {
       isSubscribed = false;
       subscription.unsubscribe();
     };
-  }, [fetchInitialData, router]);
+  }, [fetchInitialData, router, mounted]); // Incluimos mounted para que el candado sea dinámico e inteligente
 
   // Filtros de la tabla
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -123,7 +124,7 @@ export default function Dashboard() {
     setSelectedAccountId(null);
   };
 
-  // Salvavidas de hidratación: si no cargaron los datos reales en el cliente, mostramos estado de carga seguro
+  // Salvavidas de hidratación seguro
   if (!mounted) {
     return <div className="min-h-screen bg-slate-50 w-full flex items-center justify-center text-slate-400 text-sm">Cargando panel financiero...</div>;
   }
@@ -140,18 +141,14 @@ export default function Dashboard() {
           <button
             onClick={async () => {
               try {
-                const supabaseInstance = createClientSupabaseClient();
-                await supabaseInstance.auth.signOut();
-
-                // Limpieza de estados residuales
+                await supabase.auth.signOut();
                 localStorage.clear();
                 sessionStorage.clear();
-
                 console.log("🏃‍♂️ Redirigiendo limpiamente a /login...");
                 window.location.href = "/login";
               } catch (err) {
                 console.error("Error al cerrar sesión:", err);
-                window.location.href = "/login"; // Asegurar redirección incluso si signOut falla
+                window.location.href = "/login";
               }
             }}
             className="bg-red-500 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-red-600 transition"
