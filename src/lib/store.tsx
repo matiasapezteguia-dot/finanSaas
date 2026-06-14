@@ -30,11 +30,11 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
       transactionsRes,
       accountsRes
     ] = await Promise.all([
-      supabase.from('account_groups').select('id, name'),
-      supabase.from('account_categories').select('id, name'),
+      supabase.from('account_groups').select('id, name').is('deleted_at', null),
+      supabase.from('account_categories').select('id, name').is('deleted_at', null),
       supabase.from('transaction_types').select('id, name, code'),
-      supabase.from('transactions').select('*'), 
-      supabase.from('accounts').select('id, created_at, name, currency, initial_amount, current_amount, account_group_id, account_category_id')
+      supabase.from('transactions').select('*').is('deleted_at', null), 
+      supabase.from('accounts').select('id, created_at, name, currency, initial_amount, current_amount, account_group_id, account_category_id').is('deleted_at', null)
     ]);
 
     if (groupsRes.error) throw groupsRes.error;
@@ -86,6 +86,43 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
 };
 
 export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
+
+  const ejecutarSoftDeleteGenerico = async <K extends keyof StoreState>( 
+    tableName: string,
+    id: string,
+    stateKey: K
+  ) => {
+    type ItemType = StoreState[K] extends (infer U)[] ? U : never;
+    if (!Array.isArray(get()[stateKey])) {
+      console.error(`Error: ${String(stateKey)} no es un array en el estado.`);
+      return;
+    }
+    const previousState = get()[stateKey] as ItemType[];
+    const filteredState = previousState.filter((item) => (item as any).id !== id);
+
+    console.log(`✨ OPTIMISTIC: Removiendo ${id} de ${String(stateKey)} de la pantalla.`);
+    set({ [stateKey]: filteredState } as Partial<StoreState>);
+
+    try {
+      const { error } = await supabase
+        .from(tableName)
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id);
+
+      if (error) {
+        console.error(`❌ Error diferido al borrar lógicamente en Supabase (${tableName}):`, error);
+        set({ [stateKey]: previousState } as Partial<StoreState>); // Revert optimistic update
+        alert(`No se pudo borrar lógicamente: ${error.message}`);
+      } else {
+        console.log(`✅ Servidor confirmó el borrado lógico de ${id} en ${tableName}.`);
+        // No es necesario fetchInitialData aquí, ya que el filtro .is('deleted_at', null) se encargará en el próximo fetch
+      }
+    } catch (err) {
+      console.error(`🔥 Error crítico al ejecutar soft delete genérico para ${tableName}:`, err);
+      set({ [stateKey]: previousState } as Partial<StoreState>); // Revert optimistic update
+    }
+  };
+
   return {
     ...initialState,
 
@@ -130,30 +167,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     },
   
     deleteTransaction: async (id: string) => {
-      try {
-        const transaccionesPrevias = get().transactions;
-        const transaccionesFiltradas = transaccionesPrevias.filter(t => t.id !== id);
-        
-        console.log(`✨ OPTIMISTIC: Removiendo transacción ${id} de la pantalla.`);
-        set({ transactions: transaccionesFiltradas });
-
-        supabase
-          .from('transactions')
-          .delete()
-          .eq('id', id)
-          .then(({ error }) => {
-            if (error) {
-              console.error("❌ Error diferido al borrar en Supabase:", error);
-              set({ transactions: transaccionesPrevias });
-              alert(`No se pudo borrar: ${error.message}`);
-            } else {
-              console.log("✅ Servidor confirmó la eliminación con éxito.");
-              get().fetchInitialData();
-            }
-          });
-      } catch (err) {
-        console.error('🔥 Error crítico al eliminar transacción:', err);
-      }
+      await ejecutarSoftDeleteGenerico('transactions', id, 'transactions');
     },
 
     // =========================================================================
@@ -202,17 +216,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     },
 
     deleteAccount: async (id: string) => {
-      try {
-        const { error } = await supabase
-          .from('accounts')
-          .delete()
-          .eq('id', id);
-
-        if (error) throw error;
-        await get().fetchInitialData();
-      } catch (err) {
-        console.error('🔥 Error al eliminar cuenta:', err);
-      }
+      await ejecutarSoftDeleteGenerico('accounts', id, 'accounts');
     },
 
     // =========================================================================
@@ -239,13 +243,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     },
 
     deleteAccountGroup: async (id: string) => {
-      try {
-        const { error } = await supabase.from('account_groups').delete().eq('id', id);
-        if (error) throw error;
-        await get().fetchInitialData();
-      } catch (error) {
-        console.error("🔥 Error al eliminar grupo:", error);
-      }
+      await ejecutarSoftDeleteGenerico('account_groups', id, 'accountGroups');
     },
 
     addAccountCategory: async (name: string) => {
@@ -269,13 +267,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     },
 
     deleteAccountCategory: async (id: string) => {
-      try {
-        const { error } = await supabase.from('account_categories').delete().eq('id', id);
-        if (error) throw error;
-        await get().fetchInitialData();
-      } catch (error) {
-        console.error("🔥 Error al eliminar categoría:", error);
-      }
+      await ejecutarSoftDeleteGenerico('account_categories', id, 'accountCategories');
     },
 
     // =========================================================================

@@ -13,12 +13,14 @@ export interface AccountGroup {
   id: string;
   name: string;
   created_at?: string;
+  deleted_at?: string | null;
 }
 
 export interface AccountCategory {
   id: string;
   name: string;
   created_at?: string;
+  deleted_at?: string | null;
 }
 
 export interface MovementTypeItem {
@@ -37,6 +39,7 @@ export interface Account {
   current_amount: number;
   user_id: string | null;
   created_at?: string;
+  deleted_at?: string | null;
   
   // 🔄 CAPA DE COMPATIBILIDAD VIRTUAL:
   // El Store rellenará estas dos propiedades con el texto del catálogo al hacer el fetch.
@@ -59,6 +62,7 @@ export interface Transaction {
   sourceAccountId?: string;
   targetAccountId?: string;
   created_at?: string;
+  deleted_at?: string | null;
 }
 
 export interface Profile {
