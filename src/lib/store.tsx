@@ -17,7 +17,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
   if (typeof window === 'undefined') {
     return;
   }
-  
+
   set({ isFetching: true });
 
   try {
@@ -33,7 +33,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
       supabase.from('account_groups').select('id, name').is('deleted_at', null),
       supabase.from('account_categories').select('id, name').is('deleted_at', null),
       supabase.from('transaction_types').select('id, name, code'),
-      supabase.from('transactions').select('*').is('deleted_at', null), 
+      supabase.from('transactions').select('*').is('deleted_at', null),
       supabase.from('accounts').select('id, created_at, name, currency, initial_amount, current_amount, account_group_id, account_category_id').is('deleted_at', null)
     ]);
 
@@ -59,9 +59,9 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
         nombre: acc.name || 'Sin Nombre',
         moneda: (acc.currency as 'ARS' | 'USD') || 'ARS',
         montoInicial: Number(acc.initial_amount) || 0,
-        current_amount: Number(acc.current_amount) || 0, 
-        user_id: null, 
-        created_at: acc.created_at, 
+        current_amount: Number(acc.current_amount) || 0,
+        user_id: null,
+        created_at: acc.created_at,
         account_group_id: acc.account_group_id || '',
         account_category_id: acc.account_category_id || '',
         grupo: grupoObj ? grupoObj.name : 'Otros',
@@ -76,7 +76,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
       transactions: transactionsRes.data || [],
       accounts: mappedAccounts
     });
-    
+
     console.log("🎉 ¡ÉXITO TOTAL! Todo el Store se actualizó correctamente.");
   } catch (err) {
     console.error('🔥 Error real atrapado en las consultas del Store:', JSON.stringify(err, null, 2));
@@ -87,7 +87,7 @@ const fetchInitialDataLogic = async (set: StoreApi<FinanzasStoreContextType>['se
 
 export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
 
-  const ejecutarSoftDeleteGenerico = async <K extends keyof StoreState>( 
+  const ejecutarSoftDeleteGenerico = async <K extends keyof StoreState>(
     tableName: string,
     id: string,
     stateKey: K
@@ -135,11 +135,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     // =========================================================================
     addTransaction: async (transaction: Omit<Transaction, 'id' | 'created_at'>) => {
       if (get().isFetching) return;
-      
+
       try {
         console.log("📝 Insertando transacción de forma directa...");
         set({ isFetching: true });
-        
+
         const t = transaction as any;
         const payload = {
           transaction_date: t.fecha || t.date || t.transaction_date,
@@ -165,7 +165,7 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
         set({ isFetching: false });
       }
     },
-  
+
     deleteTransaction: async (id: string) => {
       await ejecutarSoftDeleteGenerico('transactions', id, 'transactions');
     },
@@ -184,8 +184,8 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
             currency: nuevaCuenta.moneda,
             initial_amount: nuevaCuenta.montoInicial,
             current_amount: nuevaCuenta.montoInicial,
-            account_group_id: nuevaCuenta.account_group_id,     
-            account_category_id: nuevaCuenta.account_category_id 
+            account_group_id: nuevaCuenta.account_group_id,
+            account_category_id: nuevaCuenta.account_category_id
           }]);
 
         if (error) throw error;
@@ -203,8 +203,8 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
             name: cuentaModificada.nombre,
             currency: cuentaModificada.moneda,
             initial_amount: cuentaModificada.montoInicial,
-            account_group_id: cuentaModificada.account_group_id,     
-            account_category_id: cuentaModificada.account_category_id 
+            account_group_id: cuentaModificada.account_group_id,
+            account_category_id: cuentaModificada.account_category_id
           })
           .eq('id', cuentaModificada.id);
 
@@ -273,20 +273,25 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     // =========================================================================
     // 🧠 INTELIGENCIA CONTABLE INTEGRADORA
     // =========================================================================
-   getAccountBalance: (accountId) => {
+    getAccountBalance: (accountId) => {
       const cuenta = get().accounts.find((a) => a.id === accountId);
       if (!cuenta) return 0;
-      
+
       const balance = get().transactions
         .filter((t) => (t as any).account_id === accountId || (t as any).cuentaId === accountId)
         .reduce((acc, t) => {
+          // 🔑 NUEVO CANDADO: Si la transacción está anulada, no altera el balance de la cuenta
+          if ((t as any).is_voided) {
+            return acc;
+          }
+
           const tipoEncontrado = get().transactionTypes.find(
             (tt) => tt.id === (t as any).transaction_type_id || tt.id === (t as any).typeId
           );
-          
+
           const nombreTipo = tipoEncontrado?.name?.toLowerCase().trim() || '';
           const codigoTipo = tipoEncontrado?.code?.toLowerCase().trim() || '';
-          
+
           // 🔑 CORREGIDO: "amount" bien escrito y con (t as any)
           const montoAbs = Math.abs((t as any).amount || (t as any).monto || 0);
 
@@ -348,6 +353,38 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           res[cat] = (res[cat] || 0) + get().getAccountBalance(a.id);
         });
       return res;
+    },
+
+    voidTransaction: async (id: string) => {
+      try {
+        // 1. ACTUALIZACIÓN OPTIMISTA: Cambiamos el estado en la UI al instante
+        const transaccionesPrevias = get().transactions;
+        const transaccionesModificadas = transaccionesPrevias.map(t =>
+          t.id === id ? { ...t, is_voided: true } : t
+        );
+
+        console.log(`✨ OPTIMISTIC (Void): Anulando transacción ${id} en la UI.`);
+        set({ transactions: transaccionesModificadas });
+
+        // 2. ACTUALIZACIÓN EN BASE DE DATOS
+        supabase
+          .from('transactions')
+          .update({ is_voided: true })
+          .eq('id', id)
+          .then(({ error }) => {
+            if (error) {
+              console.error("❌ Error al anular transacción:", error);
+              // Rollback si falla el servidor
+              set({ transactions: transaccionesPrevias });
+              alert(`No se pudo anular: ${error.message}`);
+            } else {
+              console.log("✅ Servidor confirmó la anulación con éxito.");
+              get().fetchInitialData(); // Recarga de fondo para recalcular todo
+            }
+          });
+      } catch (err) {
+        console.error('🔥 Error crítico en voidTransaction:', err);
+      }
     }
   };
 });

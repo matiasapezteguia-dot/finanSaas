@@ -7,6 +7,7 @@ interface TransactionsTableProps {
   transactions: Transaction[];
   accounts: Account[];
   deleteTransaction: (id: string) => void;
+  voidTransaction: (id: string) => Promise<void>;
   filterAccount: string;
   setFilterAccount: (account: string) => void;
   filterCategory: string;
@@ -31,6 +32,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   transactions,
   accounts,
   deleteTransaction,
+  voidTransaction,
   filterAccount,
   setFilterAccount,
   filterCategory,
@@ -317,8 +319,10 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
               </tr>
             ) : (
               currentTransactions.map((t) => {
+                const isVoided = t.raw.is_voided;
+                const rowClasses = `hover:bg-slate-50 transition ${isVoided ? 'text-gray-400 line-through opacity-60' : ''}`;
                 return (
-                  <tr key={t.id} className="hover:bg-slate-50 transition">
+                  <tr key={t.id} className={rowClasses}>
                     {/* Render de Fecha robusto */}
                     <td className="p-4">
                       {t.date ? new Date(t.date).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : 'Invalid Date'}
@@ -371,9 +375,24 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                           }
                         }}
                         className="text-red-600 hover:text-red-900 transition transform hover:scale-110"
-                        title="Anular Transacción"
+                        title="Eliminar Transacción"
                       >
                         🗑️
+                      </button>
+                      <button
+                        onClick={async () => {
+                          const confirmar = window.confirm(
+                            "⚠️ ¿Estás seguro de que deseas ANULAR esta transacción? Esta acción la marcará como anulada y afectará los balances. ¡Es reversible!"
+                          );
+                          if (confirmar) {
+                            await voidTransaction(t.id);
+                          }
+                        }}
+                        className="text-orange-600 hover:text-orange-900 transition transform hover:scale-110 ml-2"
+                        title="Anular Transacción"
+                        disabled={isVoided}
+                      >
+                        🚫
                       </button>
                     </td>
                   </tr>

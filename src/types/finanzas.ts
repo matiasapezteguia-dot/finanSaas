@@ -63,6 +63,7 @@ export interface Transaction {
   targetAccountId?: string;
   created_at?: string;
   deleted_at?: string | null;
+  is_voided?: boolean;
 }
 
 export interface Profile {
@@ -120,6 +121,7 @@ export interface FinanzasStoreContextType extends StoreState {
   fetchInitialData: () => Promise<void>; // Asegurado método de sincronización
   addTransaction: (transaction: Omit<Transaction, 'id' | 'created_at'>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  voidTransaction: (id: string) => Promise<void>;
   getAccountBalance: (accountId: string) => number;
   getTotalARS: () => number;
   getAvailableARS: () => number;

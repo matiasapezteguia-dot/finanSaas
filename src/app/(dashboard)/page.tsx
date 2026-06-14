@@ -24,7 +24,8 @@ export default function Dashboard() {
     accountGroups,
     fetchInitialData,
     getTotalARS,
-    getTotalUSD
+    getTotalUSD,
+    voidTransaction,
   } = useFinanzasStore();
 
   // Orquestador de inicialización inmune a congelamientos por F5 y navegación entre rutas
@@ -194,6 +195,7 @@ export default function Dashboard() {
         filterGroup={filterGroup}
         setFilterGroup={setFilterGroup}
         accountGroups={accountGroups}
+        voidTransaction={voidTransaction}
       />
 
       <AddTransactionModal
