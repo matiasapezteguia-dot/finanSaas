@@ -195,41 +195,61 @@ export default function ConfiguracionPage() {
     transactions,
   } = useFinanzasStore();
 
-  // =========================================================================
-  // 🏆 CONTROL DE ACCESO REACTIVO Y SINCRONIZACIÓN CON SUPABASE
+ // =========================================================================
+  // 🏆 CONTROL DE ACCESO REACTIVO Y SINCRONIZACIÓN CON SUPABASE (BLINDADO)
   // =========================================================================
   useEffect(() => {
-    setMounted(true);
-
     console.log("⏳ Activando escucha reactiva de sesión en Configuración...");
+    let isSubscribed = true;
+
+    // Función interna para evitar colisiones en llamadas asincrónicas
+    const inicializarDatosConfig = async () => {
+      try {
+        console.log("🚀 CONFIG: Disparando ráfaga inicial de datos segura.");
+        await fetchInitialData();
+        
+        if (isSubscribed) {
+          setAuthed(true);
+          setMounted(true); // Se despierta la UI en limpio recién acá
+          console.log("🎉 CONFIG: Datos sincronizados y pantalla liberada.");
+        }
+      } catch (error) {
+        console.error("❌ Error en la ráfaga de configuración:", error);
+        router.push('/login');
+      }
+    };
+
+    // Verificación inmediata por caché de sesión madura
+    const verificarSesionInmediata = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user && !authed) {
+        await inicializarDatosConfig();
+      } else if (!session) {
+        router.push('/login');
+      }
+    };
+
+    verificarSesionInmediata();
 
     // Escuchamos de forma viva el estado de autenticación de Supabase
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log(`🔄 CONFIG - EVENTO AUTH: ${event}`, session ? "Hay sesión" : "No hay sesión");
+      console.log(`🔄 CONFIG - EVENTO AUTH DETECTADO: ${event}`);
 
-      if (session?.user) {
-        try {
-          // Aseguramos la data levantando la ráfaga solo si hay sesión real
-          await fetchInitialData();
-
-          // Verificamos el estado después de la ráfaga
-          const estadoActual = useFinanzasStore.getState();
-          setAuthed(true);
-        } catch (error) {
-          console.error("❌ Error en la ráfaga de configuración:", error);
-          // Si falla la API de verdad, lo mandamos al login
+      // 🔑 EL CANDADO DEFINTIVO: Si ya está autenticado y montado, ignoramos disparos fantasmas
+      if (event === 'SIGNED_IN' && session?.user && !authed) {
+        await inicializarDatosConfig();
+      } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
+        if (isSubscribed) {
           router.push('/login');
         }
-      } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
-        // Si de entrada no hay sesión o se deslogueó, al login de forma suave con el router de Next
-        router.push('/login');
       }
     });
 
     return () => {
+      isSubscribed = false;
       subscription.unsubscribe();
     };
-  }, [fetchInitialData, router]);
+  }, [fetchInitialData, router, authed]); // Incluimos authed para que el candado sea dinámico
 
   // Seteo de selects por defecto una vez que todo está maduro
   useEffect(() => {
@@ -264,9 +284,9 @@ export default function ConfiguracionPage() {
   const [editingAccountId, setEditingAccountId] = useState<string | null>(null);
   const [editedAccount, setEditedAccount] = useState<Account | null>(null);
 
-  const handleAddAccount = () => {
+  const handleAddAccount = async () => {
     if (newAccount.nombre && newAccount.montoInicial >= 0 && newAccount.account_group_id && newAccount.account_category_id) {
-      addAccount(newAccount as any);
+      await addAccount(newAccount as any);
       setNewAccount({
         nombre: '',
         montoInicial: 0,
