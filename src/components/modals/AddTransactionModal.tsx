@@ -9,7 +9,7 @@ interface AddTransactionModalProps {
 }
 
 export default function AddTransactionModal({ isOpen, onClose }: AddTransactionModalProps) {
-  const { addTransaction, accounts, transactionTypes } = useFinanzasStore();
+  const { accounts, transactionTypes } = useFinanzasStore();
 
   const [selectedTransactionTypeId, setSelectedTransactionTypeId] = useState<string>('');
   const [selectedTransactionTypeCode, setSelectedTransactionTypeCode] = useState<string>('income');
@@ -47,7 +47,9 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
   const isSelectDestinoDisabled = selectedTransactionTypeCode === 'expense' || selectedTransactionTypeCode === 'adjustment';
   const isTextDestinoDisabled = selectedTransactionTypeCode === 'income' || selectedTransactionTypeCode === 'transfer' || selectedTransactionTypeCode === 'adjustment';
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
+    const addTransaction = useFinanzasStore.getState().addTransaction;
+
     e.preventDefault();
     setErrorMessage("");
 
@@ -122,7 +124,7 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
     }
 
     // 2. Enviamos el objeto mapeado al nuevo esquema sin user_id y con las propiedades correctas
-    addTransaction({
+    await addTransaction({
       descripcion: description + extraInfo,
       monto: parseFloat(amount),
       moneda: currency,

@@ -78,7 +78,7 @@ export default function Dashboard() {
       console.log("🔄 EVENTO DE AUTENTICACIÓN DETECTADO:", event, session ? "Hay sesión" : "No hay sesión");
 
       // 🔑 EL CANDADO CLAVE: Evitamos re-inicializar el Dashboard con cada SIGNED_IN fantasma si ya está montado
-      if (event === 'SIGNED_IN' && session && !mounted) {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && !mounted) {
         await inicializarDatosDashboard();
       } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
         console.log("⚠️ No hay sesión activa. Redirigiendo a /login.");

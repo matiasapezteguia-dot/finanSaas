@@ -236,7 +236,7 @@ export default function ConfiguracionPage() {
       console.log(`🔄 CONFIG - EVENTO AUTH DETECTADO: ${event}`);
 
       // 🔑 EL CANDADO DEFINTIVO: Si ya está autenticado y montado, ignoramos disparos fantasmas
-      if (event === 'SIGNED_IN' && session?.user && !authed) {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session?.user && !authed) {
         await inicializarDatosConfig();
       } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
         if (isSubscribed) {
