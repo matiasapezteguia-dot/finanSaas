@@ -136,19 +136,38 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     addTransaction: async (transaction: Omit<Transaction, 'id' | 'created_at'>) => {
       if (get().isFetching) return;
 
+      set({ isFetching: true }); // Set fetching at the beginning
+
       try {
         console.log("📝 Insertando transacción de forma directa...");
-        set({ isFetching: true });
 
         const t = transaction as any;
-        const payload = {
+        const payload: any = {
           transaction_date: t.fecha || t.date || t.transaction_date,
           description: t.descripcion || t.description,
           amount: Number(t.monto || t.amount) || 0,
           currency: t.moneda || t.currency,
           account_id: t.cuentaId || t.account_id,
-          transaction_type_id: t.transaction_type_id || t.typeId
+          transaction_type_id: t.transaction_type_id || t.typeId,
         };
+
+        console.log("Payload de la transacción:", payload); // Log del payload
+
+        // No se requiere user_id directamente en el payload de transactions, se asocia via account_id
+        // La lógica de obtener el user_id de la sesión se elimina.
+
+        // Si se necesitara validar que el usuario está autenticado antes de proceder,
+        // se podría mantener la siguiente lógica, pero sin asignarla al payload de transaction.
+        // const { data: { session } } = await supabase.auth.getSession();
+        // const userId = session?.user?.id;
+        // if (!userId) {
+        //   console.error('🔥 Error: No se pudo obtener el ID del usuario de la sesión de Supabase.');
+        //   alert('No se pudo guardar la transacción: Usuario no autenticado.');
+        //   return; // Exit early if no user ID
+        // }
+
+        // console.log("Payload de la transacción (final):", payload); // Log del payload final sin user_id
+
 
         const { error } = await supabase.from('transactions').insert([payload]);
 
@@ -159,10 +178,11 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
           console.log("✅ Servidor confirmó la inserción con éxito.");
           await get().fetchInitialData();
         }
-      } catch (err) {
+      } catch (err: any) { // Catch any error in the entire process
         console.error('🔥 Error crítico en el hilo de addTransaction:', err);
+        alert(`Error inesperado al guardar la transacción: ${err.message || 'Desconocido'}`);
       } finally {
-        set({ isFetching: false });
+        set({ isFetching: false }); // Ensure isFetching is reset
       }
     },
 
