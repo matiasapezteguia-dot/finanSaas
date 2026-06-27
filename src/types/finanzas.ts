@@ -50,20 +50,19 @@ export interface Account {
 
 export interface Transaction {
   id: string;
-  cuentaId: string;
+  account_id: string;
+  amount: number;
+  description: string | null;
+  transaction_date: string;
+  moneda: MonedaType;
   transaction_type_id: string;
   transaction_type_code?: string;
-  typeId?: string;
-  categoria: string | null;
-  monto: number;             // Signado internamente si es relacional
-  descripcion: string | null;
-  fecha: string;             // YYYY-MM-DD
-  moneda: MonedaType;
-  sourceAccountId?: string;
-  targetAccountId?: string;
-  created_at?: string;
-  deleted_at?: string | null;
+  category_id: string | null;
+  related_transaction_id: string | null;
   is_voided?: boolean;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
 }
 
 export interface Profile {
@@ -119,7 +118,7 @@ export interface StoreState {
 
 export interface FinanzasStoreContextType extends StoreState {
   fetchInitialData: () => Promise<void>; // Asegurado método de sincronización
-  addTransaction: (transaction: Omit<Transaction, 'id' | 'created_at'>) => Promise<void>;
+  addTransaction: (transaction: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   voidTransaction: (id: string) => Promise<void>;
   getAccountBalance: (accountId: string) => number;

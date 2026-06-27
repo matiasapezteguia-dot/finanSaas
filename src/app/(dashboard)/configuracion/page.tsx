@@ -316,7 +316,7 @@ export default function ConfiguracionPage() {
   };
 
   const handleDeleteAccount = (accountId: string) => {
-    const tieneMovimientos = transactions.some((t) => t.cuentaId === accountId);
+    const tieneMovimientos = transactions.some((t) => t.account_id === accountId);
 
     if (tieneMovimientos) {
       window.alert(
@@ -533,7 +533,7 @@ export default function ConfiguracionPage() {
                   </thead>
                   <tbody className="bg-white divide-y divide-gray-200">
                     {accounts.map((account) => {
-                      const tieneTransacciones = transactions.some((t) => t.cuentaId === account.id);
+                      const tieneTransacciones = transactions.some((t) => t.account_id === account.id);
 
                       return (
                         <tr key={account.id}>

@@ -9,7 +9,8 @@ interface AddTransactionModalProps {
 }
 
 export default function AddTransactionModal({ isOpen, onClose }: AddTransactionModalProps) {
-  const { accounts, transactionTypes } = useFinanzasStore();
+  // 🔑 Traemos accountCategories para poder mapear el ID correcto de la categoría automáticamente
+  const { accounts, transactionTypes, accountCategories } = useFinanzasStore();
 
   const [selectedTransactionTypeId, setSelectedTransactionTypeId] = useState<string>('');
   const [selectedTransactionTypeCode, setSelectedTransactionTypeCode] = useState<string>('income');
@@ -17,16 +18,16 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS");
-  
+   
   const [sourceAccountId, setSourceAccountId] = useState("");
   const [targetAccountId, setTargetAccountId] = useState("");
   const [sourceAccountText, setSourceAccountText] = useState("");
   const [targetAccountText, setTargetAccountText] = useState("");
-  
+   
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [errorMessage, setErrorMessage] = useState("");
 
-  // Cortocircuito de seguridad: si no cargaron los tipos todavía, no ejecutamos lógica para evitar bucles
+  // Cortocircuito de seguridad para setear el tipo por defecto
   useEffect(() => {
     if (transactionTypes && transactionTypes.length > 0 && !selectedTransactionTypeId) {
       const defaultIncomeType = transactionTypes.find(mt => mt.code === 'income');
@@ -38,9 +39,9 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
         setSelectedTransactionTypeCode(transactionTypes[0].code || '');
       }
     }
-  }, [transactionTypes]); 
+  }, [transactionTypes, selectedTransactionTypeId]); 
 
-  // Controladores visuales de los campos
+  // 🔑 Recuperamos los controladores visuales exactos del Código Repo
   const isSelectOrigenDisabled = selectedTransactionTypeCode === 'income' || selectedTransactionTypeCode === 'adjustment';
   const isTextOrigenDisabled = selectedTransactionTypeCode === 'expense' || selectedTransactionTypeCode === 'transfer' || selectedTransactionTypeCode === 'adjustment';
 
@@ -49,6 +50,7 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
 
   const handleSave = async (e: React.FormEvent) => {
     const addTransaction = useFinanzasStore.getState().addTransaction;
+    const addTransfer = useFinanzasStore.getState().addTransfer; // 🔑 Traemos el nuevo método limpio de la Store
 
     e.preventDefault();
     setErrorMessage("");
@@ -63,19 +65,15 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
       return;
     }
 
-    let finalSource: string | undefined = undefined;
-    let finalTarget: string | undefined = undefined;
     let finalMovementAccountId: string = "";
-    let finalCategory: string | null = null;
     let extraInfo = "";
 
+    // 🔑 Lógica de validación exacta del repositorio original
     if (selectedTransactionTypeCode === 'income') {
       if (!targetAccountId) {
         setErrorMessage("Debés seleccionar una cuenta destino del sistema.");
         return;
       }
-      finalSource = undefined; 
-      finalTarget = targetAccountId;
       finalMovementAccountId = targetAccountId;
       if (sourceAccountText) extraInfo = ` (Origen Externo: ${sourceAccountText})`;
 
@@ -84,8 +82,6 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
         setErrorMessage("Debés seleccionar una cuenta origen del sistema.");
         return;
       }
-      finalSource = sourceAccountId;
-      finalTarget = undefined; 
       finalMovementAccountId = sourceAccountId;
       if (targetAccountText) extraInfo = ` (Destino Externo: ${targetAccountText})`;
 
@@ -98,8 +94,6 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
         setErrorMessage("La cuenta origen y destino no pueden ser iguales.");
         return;
       }
-      finalSource = sourceAccountId;
-      finalTarget = targetAccountId;
       finalMovementAccountId = sourceAccountId;
 
     } else if (selectedTransactionTypeCode === 'adjustment') {
@@ -108,8 +102,6 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
         setErrorMessage("Seleccioná al menos una cuenta del sistema para aplicar el ajuste.");
         return;
       }
-      finalSource = referenceAccount;
-      finalTarget = referenceAccount;
       finalMovementAccountId = referenceAccount;
     }
 
@@ -119,24 +111,43 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
       return;
     }
 
-    if (systemAccount) {
-      finalCategory = systemAccount.categoria;
+    // Buscamos el ID real de la categoría asociada a la cuenta para Supabase
+    let finalCategoryId: string | null = null;
+    if (systemAccount && accountCategories) {
+      const category = accountCategories.find(cat => cat.name === systemAccount.categoria);
+      if (category) {
+        finalCategoryId = category.id;
+      }
     }
 
-    // 2. Enviamos el objeto mapeado al nuevo esquema sin user_id y con las propiedades correctas
-    await addTransaction({
-      descripcion: description + extraInfo,
-      monto: parseFloat(amount),
-      moneda: currency,
-      transaction_type_id: selectedTransactionTypeId,
-      cuentaId: finalMovementAccountId,
-      categoria: finalCategory,
-      sourceAccountId: finalSource,
-      targetAccountId: finalTarget,
-      fecha: date,
-    });
+    // Ejecución del guardado adaptado
+    if (selectedTransactionTypeCode === 'transfer') {
+      // 🔑 ARQUITECTURA LIMPIA: Delegamos todo el procesamiento duro a la Store
+      await addTransfer({
+        sourceAccountId,
+        targetAccountId,
+        amount: parseFloat(amount),
+        description,
+        transactionDate: date,
+        currency,
+        transactionTypeId: selectedTransactionTypeId
+      });
 
-    // Reset de estados
+    } else {
+      // Inserción normal usando la Store con los campos tipados exactos
+      await addTransaction({
+        account_id: finalMovementAccountId,
+        amount: selectedTransactionTypeCode === 'expense' ? -Math.abs(parseFloat(amount)) : parseFloat(amount),
+        description: description + extraInfo,
+        transaction_date: date,
+        currency: currency, 
+        transaction_type_id: selectedTransactionTypeId,
+        category_id: finalCategoryId,
+        related_transaction_id: null,
+      } as any); 
+    }
+
+    // Reset completo de estados (incluyendo textos libres)
     setDescription("");
     setAmount("");
     setCurrency("ARS");
@@ -149,7 +160,6 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
   };
 
   if (!isOpen) return null;
-  // Freno de mano asincrónico por si el store sigue cargando los tipos desde Supabase
   if (!transactionTypes || transactionTypes.length === 0) return null;
 
   return (

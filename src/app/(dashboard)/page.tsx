@@ -10,9 +10,7 @@ import DashboardKPIs from "@/components/DashboardKPIs";
 import AccountList from "@/components/AccountList";
 import TransactionsTable from "@/components/TransactionsTable";
 import AddTransactionModal from "@/components/modals/AddTransactionModal";
-
 export default function Dashboard() {
-  const [mounted, setMounted] = useState(false);
   const router = useRouter();
 
   const {
@@ -26,6 +24,7 @@ export default function Dashboard() {
     getTotalARS,
     getTotalUSD,
     voidTransaction,
+    isFetching,
   } = useFinanzasStore();
 
   // Orquestador de inicialización inmune a congelamientos por F5 y navegación entre rutas
@@ -49,9 +48,6 @@ export default function Dashboard() {
         await fetchInitialData();
         console.log("🚀 COMUNICADO 4: ¡ÉXITO! Datos del Store sincronizados.");
 
-        if (isSubscribed) {
-          setMounted(true); // Solo se despierta la pantalla si el usuario es REAL y tiene datos
-        }
       } catch (error) {
         console.error("🔥 Error al cargar datos del Store:", error);
       }
@@ -78,7 +74,7 @@ export default function Dashboard() {
       console.log("🔄 EVENTO DE AUTENTICACIÓN DETECTADO:", event, session ? "Hay sesión" : "No hay sesión");
 
       // 🔑 EL CANDADO CLAVE: Evitamos re-inicializar el Dashboard con cada SIGNED_IN fantasma si ya está montado
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && !mounted) {
+      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && (accounts.length === 0 && transactions.length === 0)) {
         await inicializarDatosDashboard();
       } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
         console.log("⚠️ No hay sesión activa. Redirigiendo a /login.");
@@ -93,7 +89,7 @@ export default function Dashboard() {
       isSubscribed = false;
       subscription.unsubscribe();
     };
-  }, [fetchInitialData, router, mounted]); // Incluimos mounted para que el candado sea dinámico e inteligente
+  }, [fetchInitialData, router, accounts.length, transactions.length]); // Incluimos accounts.length y transactions.length para que el candado sea dinámico e inteligente
 
   // Filtros de la tabla
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
@@ -119,14 +115,16 @@ export default function Dashboard() {
 
   const openAccountDetailModal = (accountId: string) => {
     setSelectedAccountId(accountId);
+    setFilterAccount(accountId); // Sincronizar el filtro de la tabla con la cuenta seleccionada
   };
 
   const closeAccountDetailModal = () => {
     setSelectedAccountId(null);
+    setFilterAccount("all"); // Resetear el filtro de la tabla al cerrar el modal
   };
 
   // Salvavidas de hidratación seguro
-  if (!mounted) {
+  if (isFetching && accounts.length === 0 && transactions.length === 0) {
     return <div className="min-h-screen bg-slate-50 w-full flex items-center justify-center text-slate-400 text-sm">Cargando panel financiero...</div>;
   }
 

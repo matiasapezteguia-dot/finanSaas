@@ -10,10 +10,9 @@ interface AccountDetailModalProps {
 }
 
 const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onClose }) => {
-  // 💻 INYECTAMOS 'transactionTypes' para resolver el código relacional de los movimientos
   const { accounts, transactions, transactionTypes, getAccountBalance, getBalancesByGroup } = useFinanzasStore();
   const [account, setAccount] = useState<Account | undefined>(undefined);
-  const [filteredTransactions, setFilteredTransactions] = useState<Transaction[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
   const [transactionTypeFilter, setTransactionTypeFilter] = useState<"all" | "income" | "expense" | "transfer">("all");
@@ -40,44 +39,32 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
   ) => {
     if (!selectedAccount) return;
 
-    // 1. Filtramos transacciones vinculadas a la cuenta
     let tempTransactions = allTransactions.filter((t) =>
-      t.cuentaId === selectedAccount.id || t.sourceAccountId === selectedAccount.id || t.targetAccountId === selectedAccount.id
+      t.account_id === selectedAccount.id
     );
 
-    // 2. Filtros de Fecha
     if (start) {
-      tempTransactions = tempTransactions.filter((t) => t.fecha.split('T')[0] >= start);
+      tempTransactions = tempTransactions.filter((t) => t.transaction_date >= start);
     }
     if (end) {
-      tempTransactions = tempTransactions.filter((t) => t.fecha.split('T')[0] <= end);
+      tempTransactions = tempTransactions.filter((t) => t.transaction_date <= end);
     }
 
-    // 3. 🛡️ FILTRO DE TIPO CORREGIDO: Buscamos el código en el catálogo real del Store
     if (typeFilter !== "all") {
       tempTransactions = tempTransactions.filter((t) => {
-        const tipoObj = transactionTypes.find(tt => tt.id === t.transaction_type_id || tt.id === (t as any).typeId);
-        const codigoReal = tipoObj?.code?.toLowerCase().trim() || '';
-        return codigoReal === typeFilter;
+        const movementType = transactionTypes.find(tt => tt.id === t.transaction_type_id);
+        return movementType?.code?.toLowerCase().trim() === typeFilter;
       });
     }
 
     setFilteredTransactions(tempTransactions);
 
-    // 4. Calcular saldo acumulado del período filtrado
     let netBalance = 0;
     tempTransactions.forEach((t) => {
-      // Si el movimiento opera sobre esta misma cuenta
-      if (t.targetAccountId === selectedAccount.id && t.sourceAccountId === selectedAccount.id) {
-        // Ajustes o cierres de cuenta que impactan sobre sí misma
-        netBalance += t.monto;
-      } else if (t.targetAccountId === selectedAccount.id) {
-        netBalance += t.monto;
-      } else if (t.sourceAccountId === selectedAccount.id) {
-        netBalance -= t.monto;
-      }
+      netBalance += t.amount;
     });
-    setFilteredBalance(netBalance);
+
+    setFilteredBalance(netBalance);    
   };
 
   const totalGroupBalance = useMemo(() => {
@@ -102,13 +89,12 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
         </div>
 
         <div className="p-6 space-y-4">
-<div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
             <div>
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Moneda</p>
               <p className="text-slate-900 font-medium">{account.moneda}</p>
             </div>
-            
-            {/* 🆕 SALDO INICIAL: Añadido exactamente en el espacio marcado de la imagen */}
+
             <div>
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Saldo Inicial</p>
               <p className="text-slate-600 font-medium text-base">
@@ -119,9 +105,10 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
 
             <div>
               <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">Saldo Actual</p>
+              {/* Buscá la celda de Saldo Actual y dejala así: */}
               <p className="text-slate-900 font-bold text-base">
-                {account.moneda === "ARS" ? "$" : "US$"}{" "}
-                {getAccountBalance(account.id).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                {getAccountBalance(account.id) >= 0 ? "" : "-"}{account.moneda === "ARS" ? "$" : "US$"}{" "}
+                {Math.abs(getAccountBalance(account.id)).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
 
@@ -196,31 +183,30 @@ const AccountDetailModal: React.FC<AccountDetailModalProps> = ({ accountId, onCl
                   </tr>
                 ) : (
                   filteredTransactions.map((t) => {
-                    const isSource = t.sourceAccountId === account.id;
-                    const displayAmount = isSource ? -t.monto : t.monto;
-                    const amountClass = isSource ? "text-red-600" : "text-green-600";
+                    const movementType = transactionTypes.find(tt => tt.id === t.transaction_type_id);
+                    const movementCode = movementType?.code?.toLowerCase().trim() || 'transfer';
+                    const nombreTipo = movementType?.name || 'Transferencia';
 
-                    // 🔄 RESOLUTOR EN CALIENTE: Obtenemos el tipo dinámicamente para las etiquetas de la lista
-                    const tipoEncontrado = transactionTypes.find(tt => tt.id === t.transaction_type_id || tt.id === (t as any).typeId);
-                    const codigoTipo = tipoEncontrado?.code?.toLowerCase().trim() || 'transfer';
-                    const nombreTipo = tipoEncontrado?.name || 'Transferencia';
+                    const displayAmount = t.amount;
+                    const amountClass = displayAmount >= 0 ? "text-green-600" : "text-red-600";
 
                     let badgeStyle = "bg-blue-100 text-blue-700";
-                    if (codigoTipo === 'income' || codigoTipo === 'ingreso') badgeStyle = "bg-green-100 text-green-700";
-                    if (codigoTipo === 'expense' || codigoTipo === 'egreso') badgeStyle = "bg-red-100 text-red-700";
-
+                    if (movementCode === 'income') badgeStyle = "bg-green-100 text-green-700";
+                    if (movementCode === 'expense') badgeStyle = "bg-red-100 text-red-700";
                     return (
                       <tr key={t.id} className="hover:bg-slate-50/80 transition bg-white">
-                        <td className="p-3 whitespace-nowrap">{t.fecha}</td>
-                        <td className="p-3">{t.descripcion}</td>
+                        <td className="p-3 whitespace-nowrap">
+                          {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : 'Sin Fecha'}
+                        </td>
+                        <td className="p-3">{t.description}</td>
                         <td className="p-3 text-center whitespace-nowrap">
                           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${badgeStyle}`}>
                             {nombreTipo}
                           </span>
                         </td>
                         <td className={`p-3 text-right font-bold whitespace-nowrap ${amountClass}`}>
-                          {displayAmount >= 0 ? '+ ' : '- '}{account.moneda === "ARS" ? "$" : "US$"}{" "}
-                          {Math.abs(displayAmount).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          {displayAmount >= 0 ? '+ ' : ''}{account.moneda === "ARS" ? "$" : "US$"}{" "}
+                          {displayAmount.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
                       </tr>
                     );

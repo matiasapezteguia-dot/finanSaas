@@ -24,7 +24,7 @@ interface TransactionsTableProps {
   currentPage: number;
   setCurrentPage: (page: number) => void;
   transactionsPerPage: number;
-  accountCategories: any[]; // Cambiado a any[] para tolerar objetos de Supabase
+  accountCategories: any[];
   accountGroups: AccountGroup[];
 }
 
@@ -52,48 +52,36 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   accountCategories,
   accountGroups,
 }) => {
-  const [sortField, setSortField] = useState<string>('date');
+  const [sortField, setSortField] = useState<string>('transaction_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
 
   const handleSort = (field: string) => {
-    if (sortField === field) {
+    // Mapeo seguro de campos de ordenamiento a las claves reales de Supabase
+    const realField = field === 'date' || field === 'fecha' ? 'transaction_date' :
+      field === 'monto' ? 'amount' :
+        field === 'descripcion' ? 'description' : field;
+
+    if (sortField === realField) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
     } else {
-      setSortField(field);
+      setSortField(realField);
       setSortDirection('desc');
     }
     setCurrentPage(1);
   };
 
-  // Helpers de conversión de fechas tolerantes al backend relacional de Supabase
-  const createLocalDate = (dateString: string): Date => {
-    const [year, month, day] = dateString.split('-').map(Number);
-    return new Date(year, month - 1, day);
-  };
+  // Normalización directa basada en tus 13 llaves reales de consola
+  const normalizedTransactions = (transactions || []).map((t: any) => {
 
-  const getLocalMidnight = (dateInput: any): Date => {
-    if (!dateInput) return new Date();
-    const d = new Date(dateInput);
-    if (isNaN(d.getTime())) return new Date();
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate());
-  };
-
-  // Mapeador Inteligente de Normalización de Transacciones
-  const normalizedTransactions = transactions.map((t: any) => {
-    // 1. Extraer Fecha Real
-    const rawDate = t.transaction_date || t.date || t.fecha;
-
-    // 2. Extraer Monto Real
+    // 🔑 BLINDAJE ABSOLUTO: Extrae el dato real pase lo que pase y limpia los undefined
+    const rawDate = t.transaction_date || t.fecha || t.date || new Date().toISOString().split('T')[0];
     const rawAmount = t.amount ?? t.monto ?? 0;
-
-    // 3. Extraer Moneda Real
     const rawCurrency = t.currency || t.moneda || 'ARS';
+    const rawDescription = t.description || t.descripcion || 'Sin descripción';
 
-    // 4. Extraer Tipo de Transacción y normalizarlo a código ('income', 'expense', etc.)
     let codeType = 'adjustment';
     let labelType = 'Ajuste';
 
-    // Lista dura temporal para mappear UUIDs reales detectados en Navicat
     if (t.transaction_type_id === '0dbd4608-5fdb-4b72-8ec6-3472933213b9' || t.type === 'income' || t.tipo === 'ingreso') {
       codeType = 'income';
       labelType = 'Ingreso';
@@ -108,62 +96,82 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
       labelType = 'Ajuste';
     }
 
-    // 5. Intentar resolver las cuentas del sistema vinculadas (si aplican)
     const activeAccountId = t.account_id || t.cuentaId || t.sourceAccountId || t.targetAccountId;
     const systemAccount = accounts.find(acc => acc.id === activeAccountId);
 
     return {
       id: t.id,
-      date: rawDate,
-      description: t.description || t.descripcion || 'Sin descripción',
+      transaction_date: rawDate,
+      description: rawDescription,
       amount: Number(rawAmount),
       currency: rawCurrency,
       typeCode: codeType,
       typeLabel: labelType,
-      accountId: activeAccountId,
-      accountName: systemAccount?.nombre || '',
+      account_id: activeAccountId,
+      accountName: systemAccount?.nombre || 'Ajuste / Entidad Externa',
       category: systemAccount?.categoria || t.categoria || '',
       group: systemAccount?.grupo || '',
-      raw: t // Guardamos la referencia por las dudas
+      is_voided: !!t.is_voided
     };
   });
 
-  // Lógica de filtrado utilizando la lista normalizada segura
+  // Filtro tolerante inmune a baches de fechas vacías
   const filteredAndSortedTransactions = normalizedTransactions
     .filter(t => {
-      const transactionDate = getLocalMidnight(t.date);
-      const start = filterStartDate ? createLocalDate(filterStartDate) : null;
-      const end = filterEndDate ? createLocalDate(filterEndDate) : null;
-      if (end) end.setHours(23, 59, 59, 999);
+      // Filtro por cuenta tolerante a strings o UUIDs
+      const coincideCuenta = !filterAccount || filterAccount === 'all' || String(t.account_id).trim() === String(filterAccount).trim();
 
-      // Filtro por cuenta
-      const coincideCuenta = filterAccount === 'all' || t.accountId === filterAccount;
-
-      // Filtro por categoría
-      const coincideCategoria = filterCategory === 'all' || t.category === filterCategory;
-
-      // Filtro por tipo de transacción
+      // Filtro por tipo de movimiento
       const coincideTipo = filterType === 'all' || t.typeCode === filterType;
 
-      // Filtro por grupo
+      // Filtro por categoría y grupo
+      const coincideCategoria = filterCategory === 'all' || t.category === filterCategory;
       const coincideGrupo = filterGroup === 'all' || t.group === filterGroup;
 
-      // Filtro por rango de fechas
-      const coincideFecha = (!start || transactionDate >= start) && (!end || transactionDate <= end);
+      // Filtro por fechas seguro
+      let coincideFecha = true;
+      if (filterStartDate || filterEndDate) {
+        const tDate = new Date(t.transaction_date);
+        if (filterStartDate) {
+          const start = new Date(filterStartDate);
+          start.setHours(0, 0, 0, 0);
+          if (tDate < start) coincideFecha = false;
+        }
+        if (filterEndDate) {
+          const end = new Date(filterEndDate);
+          end.setHours(23, 59, 59, 999);
+          if (tDate > end) coincideFecha = false;
+        }
+      }
 
-      return coincideCuenta && coincideCategoria && coincideTipo && coincideGrupo && coincideFecha;
+      return coincideCuenta && coincideTipo && coincideCategoria && coincideGrupo && coincideFecha;
     })
     .sort((a, b) => {
-      if (!sortField) return 0;
-      let valA: any = a[sortField as keyof typeof a];
-      let valB: any = b[sortField as keyof typeof b];
+      // 🔑 TRADUCTOR INDUSTRIAL: Traduce cualquier llamada vieja al campo normalizado real
+      const campoReal = sortField === 'date' || sortField === 'fecha' ? 'transaction_date' :
+        sortField === 'monto' ? 'amount' :
+          sortField === 'descripcion' ? 'description' : sortField;
 
-      if (sortField === 'date') {
-        valA = new Date(valA).getTime();
-        valB = new Date(valB).getTime();
-      } else if (sortField === 'amount') {
-        valA = Number(valA);
-        valB = Number(valB);
+      if (!campoReal) return 0;
+      let valA = a[campoReal as keyof typeof a];
+      let valB = b[campoReal as keyof typeof b];
+
+      if (campoReal === 'transaction_date') {
+        const timeA = new Date(valA || 0).getTime();
+        const timeB = new Date(valB || 0).getTime();
+        return sortDirection === 'asc' ? timeA - timeB : timeB - timeA;
+      }
+
+      if (campoReal === 'amount') {
+        const numA = Number(valA || 0);
+        const numB = Number(valB || 0);
+        return sortDirection === 'asc' ? numA - numB : numB - numA;
+      }
+
+      if (campoReal === 'description') {
+        return sortDirection === 'asc'
+          ? String(valA || '').localeCompare(String(valB || ''))
+          : String(valB || '').localeCompare(String(valA || ''));
       }
 
       if (valA < valB) return sortDirection === 'asc' ? -1 : 1;
@@ -171,7 +179,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
       return 0;
     });
 
-  // Paginación
   const indexOfLastTransaction = currentPage * transactionsPerPage;
   const indexOfFirstTransaction = indexOfLastTransaction - transactionsPerPage;
   const currentTransactions = filteredAndSortedTransactions.slice(indexOfFirstTransaction, indexOfLastTransaction);
@@ -180,16 +187,14 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   return (
-    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden" suppressHydrationWarning={true}>
       <div className="p-6 border-b border-slate-200 flex justify-between items-center">
         <h2 className="text-xl font-bold text-slate-900">Últimas Transacciones</h2>
-
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
           <button
-            onClick={() => excelExportService.exportTransacciones(transactions, accounts)}
+            onClick={() => excelExportService.exportTransacciones(transactions, accounts, accountCategories)}
             className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-2.5 px-4 rounded-xl flex items-center gap-2 transition-all shadow-sm hover:shadow active:scale-95 text-sm"
           >
-            {/* Icono de descarga de documento Excel */}
             <svg className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
             </svg>
@@ -238,7 +243,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
             >
               <option value="all">Todos los Grupos</option>
               {accountGroups.map(group => (
-                // CORREGIDO: Usamos el id único para la key y group.name para el valor
                 <option key={group.id} value={group.name}>{group.name}</option>
               ))}
             </select>
@@ -287,7 +291,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
           </div>
         </div>
 
-        {/* Estructura de la Tabla */}
+        {/* Estructura de Renderizado Rigurosa de la Tabla */}
         <table className="w-full text-left border-collapse">
           <thead>
             <tr className="bg-slate-50 text-slate-400 text-xs font-bold uppercase tracking-wider border-b border-slate-200">
@@ -319,22 +323,16 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
               </tr>
             ) : (
               currentTransactions.map((t) => {
-                const isVoided = t.raw.is_voided;
-                const rowClasses = `hover:bg-slate-50 transition ${isVoided ? 'text-gray-400 line-through opacity-60' : ''}`;
+                const rowClasses = `hover:bg-slate-50 transition ${t.is_voided ? 'text-gray-400 line-through opacity-60' : ''}`;
                 return (
                   <tr key={t.id} className={rowClasses}>
-                    {/* Render de Fecha robusto */}
+                    {/* 🔑 CAMPO REAL: t.transaction_date */}
                     <td className="p-4">
-                      {t.date ? new Date(t.date).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : 'Invalid Date'}
+                      {t.transaction_date ? new Date(t.transaction_date).toLocaleDateString('es-AR', { timeZone: 'UTC' }) : 'Sin Fecha'}
                     </td>
+                    {/* 🔑 CAMPO REAL: t.description */}
                     <td className="p-4 font-medium text-slate-900">{t.description}</td>
-
-                    {/* Cuenta mapeada por ID relacional */}
-                    <td className="p-4 text-slate-600 font-medium">
-                      {t.accountName || 'Entidad Externa / Ajuste'}
-                    </td>
-
-                    {/* Badge del tipo de transacción */}
+                    <td className="p-4 text-slate-600 font-medium">{t.accountName}</td>
                     <td className="p-4 text-center">
                       <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${t.typeCode === 'income' ? 'bg-green-100 text-green-700' :
                         t.typeCode === 'expense' ? 'bg-red-100 text-red-700' :
@@ -344,35 +342,22 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                         {t.typeLabel}
                       </span>
                     </td>
-
-                    {/* Badge de Moneda */}
                     <td className="p-4 text-center">
                       <span className={`px-2 py-1 rounded-md text-xs font-bold ${t.currency === 'ARS' ? 'bg-blue-50 text-blue-600' : 'bg-emerald-50 text-emerald-600'}`}>
                         {t.currency}
                       </span>
                     </td>
-
-                    {/* Impacto de Monto numérico formateado */}
+                    {/* 🔑 CAMPO REAL: t.amount (calculado de forma segura) */}
                     <td className={`p-4 text-right font-bold ${t.typeCode === 'income' ? 'text-green-600' :
-                      t.typeCode === 'expense' ? 'text-red-600' :
-                        'text-blue-600'
-                      }`}>
-                      {t.typeCode === 'income' ? '+ ' : t.typeCode === 'expense' ? '- ' : ''}
-                      $ {t.amount.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      t.typeCode === 'expense' ? 'text-red-600' : 'text-blue-600'
+                      }`}>                      
+                      $ {Number(t.amount || 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </td>
-
                     <td className="p-4 text-center">
                       <button
                         onClick={() => {
-                          // 🚨 Candado de seguridad antes de hacer desaparecer nada
-                          const confirmar = window.confirm(
-                            "⚠️ ¿Estás seguro de que deseas anular esta transacción? Esta acción modificará los balances de la cuenta de forma definitiva."
-                          );
-
-                          if (confirmar) {
-                            console.log("🔍 DETECTOR DE ID DE TRANSACCIÓN:", t);
-                            deleteTransaction(t.id);
-                          }
+                          const confirmar = window.confirm("⚠️ ¿Estás seguro de que deseas eliminar esta transacción?");
+                          if (confirmar) deleteTransaction(t.id);
                         }}
                         className="text-red-600 hover:text-red-900 transition transform hover:scale-110"
                         title="Eliminar Transacción"
@@ -381,16 +366,12 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
                       </button>
                       <button
                         onClick={async () => {
-                          const confirmar = window.confirm(
-                            "⚠️ ¿Estás seguro de que deseas ANULAR esta transacción? Esta acción la marcará como anulada y afectará los balances. ¡Es reversible!"
-                          );
-                          if (confirmar) {
-                            await voidTransaction(t.id);
-                          }
+                          const confirmar = window.confirm("⚠️ ¿Estás seguro de que deseas ANULAR esta transacción?");
+                          if (confirmar) await voidTransaction(t.id);
                         }}
                         className="text-orange-600 hover:text-orange-900 transition transform hover:scale-110 ml-2"
                         title="Anular Transacción"
-                        disabled={isVoided}
+                        disabled={t.is_voided}
                       >
                         🚫
                       </button>
@@ -402,7 +383,6 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
           </tbody>
         </table>
 
-        {/* Controles de Paginación */}
         {filteredAndSortedTransactions.length > transactionsPerPage && (
           <div className="p-4 flex justify-center items-center space-x-2 border-t border-slate-200">
             <button

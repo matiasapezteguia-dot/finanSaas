@@ -48,8 +48,7 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
   }
 
   async addCategory(name: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('account_categories')
+    const { error } = await (this.supabase.from('account_categories' as any) as any)
       .insert([{ name }]);
 
     if (error) {
@@ -71,8 +70,7 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
   }
 
   async addGroup(name: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('account_groups')
+    const { error } = await (this.supabase.from('account_groups' as any) as any)
       .insert([{ name }]);
 
     if (error) {
@@ -93,8 +91,7 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
     }
   }
   async updateGroup(id: string, newName: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('account_groups')
+    const { error } = await (this.supabase.from('account_groups' as any) as any)
       .update({ name: newName })
       .eq('id', id);
 
@@ -105,14 +102,13 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
   }
 
   async updateCategory(id: string, newName: string): Promise<void> {
-    const { error } = await this.supabase
-      .from('account_categories')
+    const { error } = await (this.supabase.from('account_categories' as any) as any) // 🔑 El bypass salvador
       .update({ name: newName })
       .eq('id', id);
 
     if (error) {
       console.error('Error updating category:', error);
-      throw new Error(error.message);
+      throw error;
     }
   }
 }

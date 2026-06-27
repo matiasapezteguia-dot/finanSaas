@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { Account, Transaction } from '../types/finanzas';
+import { Account, Transaction, AccountCategory } from '../types/finanzas';
 
 /**
  * Servicio utilitario centralizado para la exportación de datos financieros a Excel.
@@ -11,27 +11,26 @@ export const excelExportService = {
    * 1. EXPORTAR TRANSACCIONES (Libro Diario)
    * Toma el historial de movimientos y cruza los IDs relacionales con los nombres de cuenta actuales.
    */
-  exportTransacciones: (transactions: Transaction[], accounts: Account[]) => {
+  exportTransacciones: (transactions: Transaction[], accounts: Account[], accountCategories: AccountCategory[]) => {
     if (!transactions || transactions.length === 0) {
       window.alert("No hay transacciones registradas para exportar.");
       return;
     }
 
-    console.log(`📊 Generando archivo Excel para ${transactions.length} movimientos...`);
-
     // Mapeamos al formato exacto de filas que queremos en la planilla
     const filasExcel = transactions.map((tx) => {
       // Cruzamos los datos usando los IDs limpios que refactorizamos hoy
-      const cuentaAsociada = accounts.find((a) => a.id === tx.cuentaId);
+      const cuentaAsociada = accounts.find((a) => a.id === tx.account_id);
+      const categoriaAsociada = accountCategories.find((cat) => cat.id === tx.category_id);
 
       return {
-        "Fecha": tx.fecha ? new Date(tx.fecha).toLocaleDateString('es-AR') : 'Sin Fecha',
+        "Fecha": tx.transaction_date ? new Date(tx.transaction_date).toLocaleDateString('es-AR') : 'Sin Fecha',
         "Cuenta": cuentaAsociada ? cuentaAsociada.nombre : 'Cuenta Desconocida',
-        "Categoría": tx.categoria || 'Sin Categoría',
-        "Descripción / Detalle": tx.descripcion || '',
+        "Categoría": categoriaAsociada ? categoriaAsociada.name : 'Sin Categoría',
+        "Descripción / Detalle": tx.description || '',
         "Moneda": cuentaAsociada ? cuentaAsociada.moneda : 'ARS',
-        "Monto": Number(tx.monto) || 0,
-        "Tipo": tx.monto >= 0 ? "Ingreso" : "Egreso"
+        "Monto": Number(tx.amount) || 0,
+        "Tipo": tx.amount >= 0 ? "Ingreso" : "Egreso"
       };
     });
 
@@ -46,7 +45,6 @@ export const excelExportService = {
 
     // Descarga en navegador
     XLSX.writeFile(workbook, nombreArchivo);
-    console.log("✅ ¡Descarga de Excel de Transacciones completada!");
   },
 
   /**
@@ -58,8 +56,6 @@ export const excelExportService = {
       window.alert("No hay cuentas registradas para exportar.");
       return;
     }
-
-    console.log(`📊 Generando archivo Excel de Saldos para ${accounts.length} cuentas...`);
 
     // Mapeamos los datos utilizando el calculador de balances reactivo del Store
     const filasExcel = accounts.map((account) => {
@@ -87,6 +83,5 @@ export const excelExportService = {
 
     // Descarga en navegador
     XLSX.writeFile(workbook, nombreArchivo);
-    console.log("✅ ¡Descarga de Excel de Saldos completada con la columna Categoría!");
   }
 };

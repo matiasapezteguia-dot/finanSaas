@@ -1,5 +1,5 @@
 import { ITransactionRepository, Transaction, MovementCodeType, MonedaType } from '../../types/finanzas';
-import { Database } from '../../types/supabase_types'; 
+import { Database } from '../../types/supabase_types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
 type SupabaseTransactionRow = Database['public']['Tables']['transactions']['Row'];
@@ -21,33 +21,36 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
   }
 
   private toSupabase(
-    transaction: Omit<Transaction, 'id' | 'created_at' | 'transaction_type_code'>,
-    relatedTransactionId?: string
-  ): Omit<SupabaseTransactionInsert, 'id' | 'created_at'> {
+    transaction: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted_at' | 'transaction_type_code'>
+  ): Omit<SupabaseTransactionInsert, 'id' | 'created_at' | 'updated_at'> {
     return {
-      account_id: transaction.cuentaId,
-      transaction_type_id: transaction.transaction_type_id, // ¡UNIFICADO CON LA DB REAL!
-      // BLINDAJE: Si no es un UUID válido (ej: texto libre como "asd"), se inserta null
-      category_id: this.isUUID(transaction.categoria) ? transaction.categoria : null,
-      amount: transaction.monto,
-      description: transaction.descripcion,
-      transaction_date: transaction.fecha,
-      currency: transaction.moneda,
-      related_transaction_id: relatedTransactionId,
-    };
+      account_id: transaction.account_id,
+      amount: transaction.amount,
+      description: transaction.description,
+      transaction_date: transaction.transaction_date,
+      currency: transaction.moneda, // 🔑 CAMBIO: Cambiamos la propiedad clave a 'currency'
+      transaction_type_id: transaction.transaction_type_id,
+      category_id: this.isUUID(transaction.category_id) ? transaction.category_id : null,
+      related_transaction_id: transaction.related_transaction_id,
+      is_voided: transaction.is_voided,
+    } as any; // 🔑 Agregamos 'as any' para evitar colisiones con el archivo de tipos viejo mientras probás
   }
 
   private fromSupabase(supabaseTransaction: SupabaseTransactionRow): Transaction {
     return {
       id: supabaseTransaction.id!,
-      cuentaId: supabaseTransaction.account_id!,
-      transaction_type_id: supabaseTransaction.transaction_type_id!, // ¡UNIFICADO CON LA DB REAL!
-      categoria: supabaseTransaction.category_id, // Mapeado desde el campo real
-      monto: supabaseTransaction.amount,
-      descripcion: supabaseTransaction.description,
-      fecha: supabaseTransaction.transaction_date,
+      account_id: supabaseTransaction.account_id!,
+      amount: supabaseTransaction.amount!,
+      description: supabaseTransaction.description!,
+      transaction_date: supabaseTransaction.transaction_date!,
       moneda: supabaseTransaction.currency as MonedaType,
+      transaction_type_id: supabaseTransaction.transaction_type_id!,
+      category_id: supabaseTransaction.category_id,
+      related_transaction_id: supabaseTransaction.related_transaction_id,
+      is_voided: supabaseTransaction.is_voided || false,
       created_at: supabaseTransaction.created_at,
+      updated_at: supabaseTransaction.created_at,
+      deleted_at: supabaseTransaction.deleted_at,
     };
   }
 
@@ -58,7 +61,6 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
         .select('*');
 
       if (error) {
-        // Captura y expone el objeto 'error' nativo de Supabase (PostgrestError)
         console.error('Error fetching transactions:', error);
         throw new Error(`Error fetching transactions: ${error.message}`);
       }
@@ -66,75 +68,19 @@ export class SupabaseTransactionRepository implements ITransactionRepository {
       // CORREGIDO: Se añade .bind(this) para que no falle el contexto en la iteración
       return (data as SupabaseTransactionRow[]).map(this.fromSupabase.bind(this));
     } catch (err) {
-      // Asegura que cualquier error inesperado también sea loggeado
       console.error('Unhandled error in fetchAll transactions:', err);
       throw err;
     }
   }
 
-  async save(transaction: Omit<Transaction, 'id' | 'created_at' | 'transaction_type_code'>): Promise<void> {
-    const transactionTypeCode: MovementCodeType | undefined = (transaction as Transaction).transaction_type_code as MovementCodeType;
+  async save(transaction: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>): Promise<void> {
+    const supabaseData = this.toSupabase(transaction);
+    const { error } = await this.supabase
+      .from(this.TABLE_NAME)
+      .insert(supabaseData as SupabaseTransactionInsert);
 
-    if (transactionTypeCode === 'transfer' && transaction.sourceAccountId && transaction.targetAccountId) {
-      const { cuentaId, monto, ...rest } = transaction;
-
-      const sourceTransactionData = this.toSupabase({
-        ...rest,
-        cuentaId: transaction.sourceAccountId,
-        monto: -Math.abs(monto),
-      });
-
-      const { data: sourceResult, error: sourceError } = await this.supabase
-        .from(this.TABLE_NAME)
-        .insert(sourceTransactionData as SupabaseTransactionInsert)
-        .select('*');
-
-      if (sourceError) {
-        throw new Error(`Error saving source transfer transaction: ${sourceError.message}`);
-      }
-
-      const relatedTransactionId = (sourceResult as SupabaseTransactionRow[])?.[0]?.id;
-
-      if (!relatedTransactionId) {
-        throw new Error('Could not get ID for source transfer transaction.');
-      }
-
-      const targetTransactionData = this.toSupabase(
-        {
-          ...rest,
-          cuentaId: transaction.targetAccountId,
-          monto: Math.abs(monto),
-        },
-        relatedTransactionId
-      );
-
-      const { data: targetResult, error: targetError } = await this.supabase
-        .from(this.TABLE_NAME)
-        .insert(targetTransactionData as SupabaseTransactionInsert)
-        .select('*');
-
-      if (targetError) {
-        throw new Error(`Error saving target transfer transaction: ${targetError.message}`);
-      }
-
-      const { error: updateSourceError } = await this.supabase
-        .from(this.TABLE_NAME)
-        .update({ related_transaction_id: (targetResult as SupabaseTransactionRow[])?.[0]?.id } as SupabaseTransactionUpdate)
-        .eq('id', relatedTransactionId);
-
-      if (updateSourceError) {
-        console.error(`Error updating source transaction with related_transaction_id: ${updateSourceError.message}`);
-      }
-
-    } else {
-      const supabaseData = this.toSupabase(transaction);
-      const { error } = await this.supabase
-        .from(this.TABLE_NAME)
-        .insert(supabaseData as SupabaseTransactionInsert);
-
-      if (error) {
-        throw new Error(`Error saving transaction: ${error.message}`);
-      }
+    if (error) {
+      throw new Error(`Error saving transaction: ${error.message}`);
     }
   }
 
