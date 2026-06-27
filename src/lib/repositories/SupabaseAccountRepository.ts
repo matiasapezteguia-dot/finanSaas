@@ -49,7 +49,7 @@ export class SupabaseAccountRepository {
       moneda: row.currency as MonedaType,
       montoInicial: row.initial_amount,
       current_amount: row.initial_amount, // Calculado en el frontend
-      user_id: row.user_id || null, // 🔑 CAMBIO ACÁ: Asegura que si viene undefined pase a ser null
+      user_id: null, 
       created_at: row.created_at,
       grupo: '', // Se rellena en el Store
       categoria: '', // Se rellena en el Store

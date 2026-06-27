@@ -40,12 +40,12 @@ export interface Account {
   user_id: string | null;
   created_at?: string;
   deleted_at?: string | null;
-  
+
   // 🔄 CAPA DE COMPATIBILIDAD VIRTUAL:
   // El Store rellenará estas dos propiedades con el texto del catálogo al hacer el fetch.
   // De esta manera, el Dashboard y el 90% de las tablas no se enteran del cambio y siguen sanas.
-  grupo: string;     
-  categoria: string; 
+  grupo: string;
+  categoria: string;
 }
 
 export interface Transaction {
@@ -117,6 +117,16 @@ export interface StoreState {
 }
 
 export interface FinanzasStoreContextType extends StoreState {
+  // 🔑 AGREGÁ ESTA LÍNEA EXACTA ADENTRO DE LA INTERFAZ:
+  addTransfer: (transferData: {
+    sourceAccountId: string;
+    targetAccountId: string;
+    amount: number;
+    description: string;
+    transactionDate: string;
+    currency: "ARS" | "USD";
+    transactionTypeId: string;
+  }) => Promise<void>;
   fetchInitialData: () => Promise<void>; // Asegurado método de sincronización
   addTransaction: (transaction: Omit<Transaction, 'id' | 'created_at' | 'updated_at' | 'deleted_at'>) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
