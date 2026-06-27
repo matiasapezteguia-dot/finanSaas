@@ -2,36 +2,50 @@ import { ICatalogRepository, AccountCategory, MovementTypeItem, AccountGroup } f
 import { Database } from '../../types/supabase_types';
 import { SupabaseClient } from '@supabase/supabase-js';
 
+type GroupInsert = Database['public']['Tables']['account_groups']['Insert'];
+type GroupUpdate = Database['public']['Tables']['account_groups']['Update'];
+type CategoryInsert = Database['public']['Tables']['account_categories']['Insert'];
+type CategoryUpdate = Database['public']['Tables']['account_categories']['Update'];
+
 export class SupabaseCatalogRepository implements ICatalogRepository {
   private supabase: SupabaseClient<Database>;
 
   constructor(supabase: SupabaseClient<Database>) {
     this.supabase = supabase;
   }
+
   async fetchGroups(): Promise<AccountGroup[]> {
     const { data, error } = await this.supabase
       .from('account_groups')
-      .select('id, name'); // Select id and name
+      .select('id, name')
+      .is('deleted_at', null);
 
     if (error) {
       console.error('Error fetching groups:', error);
       throw new Error(error.message);
     }
 
-    return data as AccountGroup[]; // Cast to AccountGroup[]
+    return (data || []).map(row => ({
+      id: row.id,
+      name: row.name || ''
+    }));
   }
 
   async fetchCategories(): Promise<AccountCategory[]> {
     const { data, error } = await this.supabase
       .from('account_categories')
-      .select('id, name'); // CORREGIDO: Eliminado 'created_at' que causaba el quiebre
+      .select('id, name')
+      .is('deleted_at', null);
 
     if (error) {
       console.error('Error fetching categories:', error);
       throw new Error(error.message);
     }
 
-    return data as Database['public']['Tables']['account_categories']['Row'][];
+    return (data || []).map(row => ({
+      id: row.id,
+      name: row.name || ''
+    }));
   }
 
   async fetchTransactionTypes(): Promise<MovementTypeItem[]> {
@@ -44,12 +58,19 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
       throw new Error(error.message);
     }
 
-    return data as MovementTypeItem[];
+    return (data || []).map(row => ({
+      id: row.id,
+      name: row.name || '',
+      code: row.code || ''
+    }));
   }
 
   async addCategory(name: string): Promise<void> {
-    const { error } = await (this.supabase.from('account_categories' as any) as any)
-      .insert([{ name }]);
+    const payload: CategoryInsert = { name };
+
+    const { error } = await this.supabase
+      .from('account_categories')
+      .insert([payload]);
 
     if (error) {
       console.error('Error adding category:', error);
@@ -70,8 +91,11 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
   }
 
   async addGroup(name: string): Promise<void> {
-    const { error } = await (this.supabase.from('account_groups' as any) as any)
-      .insert([{ name }]);
+    const payload: GroupInsert = { name };
+
+    const { error } = await this.supabase
+      .from('account_groups')
+      .insert([payload]);
 
     if (error) {
       console.error('Error adding group:', error);
@@ -90,9 +114,13 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
       throw new Error(error.message);
     }
   }
+
   async updateGroup(id: string, newName: string): Promise<void> {
-    const { error } = await (this.supabase.from('account_groups' as any) as any)
-      .update({ name: newName })
+    const payload: GroupUpdate = { name: newName };
+
+    const { error } = await this.supabase
+      .from('account_groups')
+      .update(payload)
       .eq('id', id);
 
     if (error) {
@@ -102,13 +130,40 @@ export class SupabaseCatalogRepository implements ICatalogRepository {
   }
 
   async updateCategory(id: string, newName: string): Promise<void> {
-    const { error } = await (this.supabase.from('account_categories' as any) as any) // 🔑 El bypass salvador
-      .update({ name: newName })
+    const payload: CategoryUpdate = { name: newName };
+
+    const { error } = await this.supabase
+      .from('account_categories')
+      .update(payload)
       .eq('id', id);
 
     if (error) {
       console.error('Error updating category:', error);
       throw error;
+    }
+  }
+
+  async softDeleteGroup(id: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('account_groups')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      console.error('🔥 Error en Repositorio al aplicar softDelete en grupo:', error);
+      throw new Error(error.message);
+    }
+  }
+
+  async softDeleteCategory(id: string): Promise<void> {
+    const { error } = await this.supabase
+      .from('account_categories')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id);
+
+    if (error) {
+      console.error('🔥 Error en Repositorio al aplicar softDelete en categoría:', error);
+      throw new Error(error.message);
     }
   }
 }

@@ -18,12 +18,12 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
   const [description, setDescription] = useState("");
   const [amount, setAmount] = useState("");
   const [currency, setCurrency] = useState<"ARS" | "USD">("ARS");
-   
+
   const [sourceAccountId, setSourceAccountId] = useState("");
   const [targetAccountId, setTargetAccountId] = useState("");
   const [sourceAccountText, setSourceAccountText] = useState("");
   const [targetAccountText, setTargetAccountText] = useState("");
-   
+
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -39,7 +39,7 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
         setSelectedTransactionTypeCode(transactionTypes[0].code || '');
       }
     }
-  }, [transactionTypes, selectedTransactionTypeId]); 
+  }, [transactionTypes, selectedTransactionTypeId]);
 
   // 🔑 Recuperamos los controladores visuales exactos del Código Repo
   const isSelectOrigenDisabled = selectedTransactionTypeCode === 'income' || selectedTransactionTypeCode === 'adjustment';
@@ -122,7 +122,6 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
 
     // Ejecución del guardado adaptado
     if (selectedTransactionTypeCode === 'transfer') {
-      // 🔑 ARQUITECTURA LIMPIA: Delegamos todo el procesamiento duro a la Store
       await addTransfer({
         sourceAccountId,
         targetAccountId,
@@ -134,20 +133,19 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
       });
 
     } else {
-      // Inserción normal usando la Store con los campos tipados exactos
       await addTransaction({
         account_id: finalMovementAccountId,
         amount: selectedTransactionTypeCode === 'expense' ? -Math.abs(parseFloat(amount)) : parseFloat(amount),
         description: description + extraInfo,
         transaction_date: date,
-        currency: currency, 
+        moneda: currency,
         transaction_type_id: selectedTransactionTypeId,
         category_id: finalCategoryId,
         related_transaction_id: null,
-      } as any); 
+      });
     }
 
-    // Reset completo de estados (incluyendo textos libres)
+    // Reset completo de estados
     setDescription("");
     setAmount("");
     setCurrency("ARS");
@@ -169,12 +167,12 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
           <h3 className="text-lg font-bold text-slate-900">Agregar Nueva entrada</h3>
           <p className="text-xs text-slate-500">Ingresá los datos reales del movimiento de caja</p>
         </div>
-        
+
         <form onSubmit={handleSave} className="p-6 space-y-4">
           <div>
             <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Descripción</label>
-            <input 
-              type="text" 
+            <input
+              type="text"
               required
               placeholder="Ej. Pago Proveedor, Venta Servicio..."
               value={description}
@@ -186,14 +184,14 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
           <div className="grid grid-cols-3 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Tipo</label>
-              <select 
+              <select
                 value={selectedTransactionTypeId}
                 onChange={(e) => {
                   const targetId = e.target.value;
                   const foundType = transactionTypes.find(mt => mt.id === targetId);
                   setSelectedTransactionTypeId(targetId);
                   setSelectedTransactionTypeCode(foundType ? (foundType.code || '') : '');
-                  
+
                   setSourceAccountId("");
                   setTargetAccountId("");
                   setSourceAccountText("");
@@ -208,8 +206,8 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Monto</label>
-              <input 
-                type="number" 
+              <input
+                type="number"
                 step="0.01"
                 required
                 placeholder="0.00"
@@ -220,7 +218,7 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
             </div>
             <div>
               <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Moneda</label>
-              <select 
+              <select
                 value={currency}
                 onChange={(e) => {
                   setCurrency(e.target.value as "ARS" | "USD");
@@ -304,14 +302,14 @@ export default function AddTransactionModal({ isOpen, onClose }: AddTransactionM
           </div>
 
           <div className="pt-4 flex space-x-3 justify-end border-t border-slate-100">
-            <button 
+            <button
               type="button"
               onClick={onClose}
               className="px-4 py-2 text-sm font-semibold text-slate-500 hover:text-slate-700 transition"
             >
               Cancelar
             </button>
-            <button 
+            <button
               type="submit"
               className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-semibold hover:bg-slate-800 transition"
             >
