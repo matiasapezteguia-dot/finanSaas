@@ -27,69 +27,70 @@ export default function Dashboard() {
     isFetching,
   } = useFinanzasStore();
 
-  // Orquestador de inicialización inmune a congelamientos por F5 y navegación entre rutas
+  // 🚀 Orquestador de inicialización definitivo (Montaje Único - Inmune a congelamientos)
   useEffect(() => {
-    console.log("🚀 COMUNICADO 1: El useEffect del Dashboard arrancó.");
-    let isSubscribed = true;
+    console.log("🚀 Orquestador de inicialización arrancó (Montaje Único).");
+    let isMounted = true;
 
-    // Función auxiliar para cargar los datos y despertar la pantalla
-    const inicializarDatosDashboard = async () => {
+    // Función desacoplada para cargar los datos protegiendo al Store de duplicados
+    const cargarDatosDashboard = async () => {
+      // 🔑 SOLUCIÓN CRÍTICA: Leemos el estado actual directamente de Zustand sin closures viejos
+      const { accounts: storeAccounts, transactions: storeTransactions, isFetching } = useFinanzasStore.getState();
+
+      if (isFetching) return;
+
+      // Si el Store ya tiene información, protegemos la red y no volvemos a consultar
+      if (storeAccounts.length > 0 || storeTransactions.length > 0) {
+        console.log("ℹ️ Los datos ya existen en el Store, omitiendo fetch duplicado.");
+        return;
+      }
+
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-
-        // 🔒 CONTROL ABSOLUTO: Si no hay sesión madura, abortamos el inicio
-        if (!session) {
-          console.log("🛑 Intento de acceso no autorizado. Redirigiendo...");
-          router.push("/login");
-          return;
-        }
-
         console.log("🚀 COMUNICADO 3: Disparando fetchInitialData() con sesión asegurada.");
         await fetchInitialData();
         console.log("🚀 COMUNICADO 4: ¡ÉXITO! Datos del Store sincronizados.");
-
       } catch (error) {
         console.error("🔥 Error al cargar datos del Store:", error);
       }
     };
 
-    // 🔒 DOBLE VERIFICACIÓN INMEDIATA (Soluciona la pantalla blanca o el "Cargando..." perpetuo)
-    const verificarSesionActual = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+    // 1. Verificación pasiva inicial al montar la pantalla
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!isMounted) return;
       if (session) {
-        console.log("🔑 Sesión madura detectada en caché inmediata para:", session.user?.email);
-        await inicializarDatosDashboard();
-      } else {
-        // Si no hay sesión de entrada, forzamos redirección limpia
-        router.push("/login");
+        console.log("🔑 Sesión detectada al montar para:", session.user?.email);
+        cargarDatosDashboard();
       }
-    };
+      // 💡 Nota: No redirigimos agresivamente acá en el arranque en frío; 
+      // dejamos que el evento definitivo INITIAL_SESSION de onAuthStateChange tome la decisión.
+    });
 
-    verificarSesionActual();
-
-    console.log("⏳ Activando canal reactivo en segundo plano por si la sesión cambia...");
-
-    // Escuchamos los cambios de auth usando la instancia compartida global
+    // 2. Canal reactivo oficial de Supabase
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
       console.log("🔄 EVENTO DE AUTENTICACIÓN DETECTADO:", event, session ? "Hay sesión" : "No hay sesión");
 
-      // 🔑 EL CANDADO CLAVE: Evitamos re-inicializar el Dashboard con cada SIGNED_IN fantasma si ya está montado
-      if ((event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') && session && (accounts.length === 0 && transactions.length === 0)) {
-        await inicializarDatosDashboard();
-      } else if (event === 'SIGNED_OUT' || (!session && event === 'INITIAL_SESSION')) {
-        console.log("⚠️ No hay sesión activa. Redirigiendo a /login.");
-        if (isSubscribed) {
+      if (session) {
+        // Si hay una sesión legítima (por login, refresh o sesión inicial), disparamos la carga segura
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+          await cargarDatosDashboard();
+        }
+      } else {
+        // 🔑 El veredicto final: Si explícitamente no hay sesión o se deslogueó, al login.
+        if (event === 'SIGNED_OUT' || event === 'INITIAL_SESSION') {
+          console.error("🛑 Sin sesión activa confirmada por Auth. Redirigiendo a /login.");
           router.push("/login");
         }
       }
     });
 
-    // Limpieza al desmontar el componente
+    // Limpieza atómica al desmontar el componente
     return () => {
-      isSubscribed = false;
+      isMounted = false;
       subscription.unsubscribe();
     };
-  }, [fetchInitialData, router, accounts.length, transactions.length]); // Incluimos accounts.length y transactions.length para que el candado sea dinámico e inteligente
+    // 🔑 SOLUCIÓN: Array de dependencias limpio. Nunca más se va a reiniciar el hook a mitad de camino.
+  }, [fetchInitialData, router]);
 
   // Filtros de la tabla
   const [isTransactionModalOpen, setIsTransactionModalOpen] = useState(false);
