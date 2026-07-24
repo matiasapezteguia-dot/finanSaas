@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Account, Transaction, AccountGroup, AccountCategory } from "../types/finanzas";
+import { Account, Transaction, AccountGroup, AccountCategory, MovementTypeItem } from "../types/finanzas";
 import { ArrowUpDown } from 'lucide-react';
 import { excelExportService } from '../utils/excelExport';
 
@@ -29,6 +29,7 @@ interface TransactionsTableProps {
   transactionsPerPage: number;
   accountCategories: AccountCategory[]; // 🔑 Tipado estricto
   accountGroups: AccountGroup[];
+  transactionTypes: MovementTypeItem[];
 }
 
 const TransactionsTable: React.FC<TransactionsTableProps> = ({
@@ -54,6 +55,7 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
   transactionsPerPage,
   accountCategories,
   accountGroups,
+  transactionTypes,
 }) => {
   const [sortField, setSortField] = useState<string>('transaction_date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
@@ -72,6 +74,9 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     setCurrentPage(1);
   };
 
+  // Catálogo real de tipos (id -> code/name), traído del store en vez de UUIDs fijos
+  const typeById = new Map(transactionTypes.map(type => [type.id, type]));
+
   // Normalización limpia utilizando el tipado de Dominio 'Transaction'
   const normalizedTransactions = (transactions || []).map((t: Transaction) => {
     const rawDate = t.transaction_date || new Date().toISOString().split('T')[0];
@@ -79,23 +84,10 @@ const TransactionsTable: React.FC<TransactionsTableProps> = ({
     const rawCurrency = t.moneda || 'ARS';
     const rawDescription = t.description || 'Sin descripción';
 
-    let codeType = 'adjustment';
-    let labelType = 'Ajuste';
-
-    // Identificación basada en los IDs oficiales del catálogo
-    if (t.transaction_type_id === '0dbd4608-5fdb-4b72-8ec6-3472933213b9') {
-      codeType = 'income';
-      labelType = 'Ingreso';
-    } else if (t.transaction_type_id === 'ed5adc36-3663-41a0-91a4-677595113d98') {
-      codeType = 'expense';
-      labelType = 'Egreso';
-    } else if (t.transaction_type_id === 'bcf8578e-a9fc-42df-8001-5451e0d654d2') {
-      codeType = 'transfer';
-      labelType = 'Transferencia';
-    } else if (t.transaction_type_id === 'f4c0770f-0a55-4fbb-a8f6-0db4ef3fa5bb') {
-      codeType = 'adjustment';
-      labelType = 'Ajuste';
-    }
+    // Identificación basada en el catálogo real de transaction_types
+    const matchedType = typeById.get(t.transaction_type_id);
+    const codeType = matchedType?.code || 'unknown';
+    const labelType = matchedType?.name || 'Sin tipo';
 
     const activeAccountId = t.account_id;
     const systemAccount = accounts.find(acc => acc.id === activeAccountId);

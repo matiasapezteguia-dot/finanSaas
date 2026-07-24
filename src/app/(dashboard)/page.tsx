@@ -25,6 +25,7 @@ export default function Dashboard() {
     getTotalUSD,
     voidTransaction,
     isFetching,
+    transactionTypes,
   } = useFinanzasStore();
 
   // 🚀 Orquestador de inicialización definitivo (Montaje Único - Inmune a congelamientos)
@@ -195,6 +196,7 @@ export default function Dashboard() {
         setFilterGroup={setFilterGroup}
         accountGroups={accountGroups}
         voidTransaction={voidTransaction}
+        transactionTypes={transactionTypes}
       />
 
       <AddTransactionModal
