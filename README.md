@@ -1,38 +1,37 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# FinanSaaS
 
-## Getting Started
+Control de caja bimonetario (ARS/USD) para pymes y profesionales independientes: cuentas, movimientos, categorías y balances en dos monedas desde un mismo dashboard.
 
-First, run the development server:
+**Demo en vivo:** [finanzas-simple.vercel.app](https://finanzas-simple.vercel.app)
+**Usuario demo:** `demo@finansaas.app` / `demo1234`
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
-```
+> Los datos de la demo son ficticios. La app corre sobre un proyecto Supabase separado del de producción real; no hay información financiera de terceros expuesta.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+---
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Sobre el proyecto
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Pensado para el día a día de una pyme o un profesional independiente que necesita ver de un vistazo cuánto tiene, en qué moneda, y de dónde vino cada movimiento. Esta versión está preparada como pieza de portfolio: modelo multi-usuario, con aislamiento de datos por cuenta (Row Level Security en Supabase) y un usuario demo público para que cualquiera pueda probarla sin comprometer datos reales.
 
-## Learn More
+## Stack
 
-To learn more about Next.js, take a look at the following resources:
+- **Next.js** + **TypeScript**
+- **Supabase** (Postgres + Row Level Security) como backend
+- **Zustand** para estado global
+- **Sentry** para monitoreo de errores en producción
+- **Vercel** para deploy
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Arquitectura
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+El código sigue un esquema de **Clean Architecture** con repositorios: la lógica de dominio no depende directamente del cliente de Supabase, sino de interfaces de repositorio que se implementan por separado. Esto separa las reglas de negocio (cómo se calcula un balance, cómo se valida una transferencia) de los detalles de infraestructura (qué motor de base de datos hay detrás), y facilita testear y migrar cualquiera de las dos capas sin tocar la otra.
 
-## Deploy on Vercel
+## Seguridad
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+- Row Level Security activo en todas las tablas; cada política verificada explícitamente contra `pg_policies`, no asumida.
+- Aislamiento de datos por usuario (`user_id` + `auth.uid()`) en cuentas y transacciones.
+- Sin `service_role key` ni credenciales expuestas en el cliente.
+- Monitoreo de errores con Sentry, con masking activo sobre datos sensibles en session replay.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+---
 
-
+*Este repo es la versión portfolio, con datos ficticios y un usuario demo público. La versión de producción original (con datos reales de uso) permanece congelada y privada.*
