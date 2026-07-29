@@ -135,6 +135,7 @@ export interface FinanzasStoreContextType extends StoreState {
   getTotalARS: () => number;
   getAvailableARS: () => number;
   getTotalARSInvestments: () => number;
+  getInvestmentCategoryId: () => string | null;
   getTotalUSD: () => number;
   getBalance: (currency: MonedaType) => number;
   getBalancesByGroup: (currency: MonedaType) => { [key: string]: number };

@@ -262,16 +262,23 @@ export const useFinanzasStore = create<FinanzasStoreContextType>((set, get) => {
     getTotalARS: () => get().getBalance('ARS'),
     getTotalUSD: () => get().getBalance('USD'),
 
+    getInvestmentCategoryId: () => {
+      const cat = get().accountCategories.find((c) => c.name === 'Inversion');
+      return cat ? cat.id : null;
+    },
+
     getAvailableARS: () => {
+      const investmentCategoryId = get().getInvestmentCategoryId();
       const total = get().accounts
-        .filter((a) => a.moneda === 'ARS' && a.categoria !== 'Inversiones' && a.categoria !== 'Inversión')
+        .filter((a) => a.moneda === 'ARS' && a.account_category_id !== investmentCategoryId)
         .reduce((acc, a) => acc + get().getAccountBalance(a.id), 0);
       return isNaN(total) ? 0 : total;
     },
 
     getTotalARSInvestments: () => {
+      const investmentCategoryId = get().getInvestmentCategoryId();
       const total = get().accounts
-        .filter((a) => a.moneda === 'ARS' && (a.categoria === 'Inversiones' || a.categoria === 'Inversión'))
+        .filter((a) => a.moneda === 'ARS' && a.account_category_id === investmentCategoryId)
         .reduce((acc, a) => acc + get().getAccountBalance(a.id), 0);
       return isNaN(total) ? 0 : total;
     },
